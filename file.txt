@@ -3,4 +3,8 @@ We are glad you are here.
 Let's build something great together.
 Amro: fatash i dont like your changes you so joniour
 Don like it 
+<<<<<<< HEAD
 HHHHHHHHH
+=======
+two words
+>>>>>>> 303167d9c413ef18065258f32e8a4c5265c8ae24
