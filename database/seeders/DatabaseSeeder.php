@@ -33,6 +33,7 @@ class DatabaseSeeder extends Seeder
             'gender' => 'Male',
         ]);
 
+        $this->call(TeacherSeeder::class);
         $this->call(StudentSeeder::class);
     }
 }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\LessonLiveController;
 use App\Http\Controllers\Manager\ClassController;
 use App\Http\Controllers\Manager\FeeController;
 use App\Http\Controllers\Manager\GuidanceController;
@@ -25,6 +26,10 @@ use App\Http\Controllers\Teacher\LessonController as TeacherLessonController;
 use App\Http\Controllers\Teacher\LiveStreamController;
 use App\Http\Controllers\Teacher\MarkController;
 use App\Http\Controllers\Teacher\MonthlyTestController;
+use App\Http\Controllers\Teacher\StudentController as TeacherStudentController;
+use App\Http\Controllers\Teacher\SubjectController as TeacherSubjectController;
+use App\Http\Controllers\Teacher\ReportController as TeacherReportController;
+use App\Http\Controllers\Teacher\PapersWorkController as TeacherPapersWorkController;
 use App\Http\Controllers\Teacher\TimeTableController;
 use App\Http\Controllers\Streaming\CloudflareWebhookController;
 use Illuminate\Support\Facades\Route;
@@ -52,6 +57,14 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::prefix('teacher')->group(function () {
+        Route::post('lessons/{lesson}/start-live-youtube', [LessonLiveController::class, 'startLive']);
+        Route::get('lessons/{lesson}/whip', [TeacherLessonController::class, 'whip']);
+        Route::get('subjects', [TeacherSubjectController::class, 'index']);
+        Route::get('subjects/{subject}', [TeacherSubjectController::class, 'show']);
+        Route::get('students', [TeacherStudentController::class, 'index']);
+        Route::get('papers-work', [TeacherPapersWorkController::class, 'index']);
+        Route::post('papers-work', [TeacherPapersWorkController::class, 'store']);
+        Route::post('reports', [TeacherReportController::class, 'store']);
         Route::get('timetable', [TimeTableController::class, 'index']);
         Route::apiResource('lessons', TeacherLessonController::class);
         Route::post('lessons/{lesson}/start-live', [LiveStreamController::class, 'start']);

@@ -13,6 +13,18 @@ return [
     | a conventional file to locate the various service credentials.
     |
     */
+'youtube' => [
+    'client_id' => env('YOUTUBE_CLIENT_ID'),
+    'client_secret' => env('YOUTUBE_CLIENT_SECRET'),
+    'redirect' => env('YOUTUBE_REDIRECT_URI'),
+],
+
+    'srs' => [
+        'whip_base_url' => env('SRS_WHIP_BASE_URL', 'http://localhost:1985/rtc/v1/whip'),
+        'rtmp_base_url' => env('SRS_RTMP_BASE_URL', 'rtmp://localhost/live'),
+        'whip_app' => env('SRS_WHIP_APP', 'live'),
+        'ffmpeg_path' => env('FFMPEG_PATH', 'ffmpeg'),
+    ],
 
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
