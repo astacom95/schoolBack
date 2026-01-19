@@ -14,6 +14,7 @@ use App\Http\Controllers\Manager\TeacherController;
 use App\Http\Controllers\Manager\TeacherTimeTableController;
 use App\Http\Controllers\Manager\TrackTeacherController;
 use App\Http\Controllers\Student\ActivityController;
+use App\Http\Controllers\Student\AttendanceController as StudentAttendanceController;
 use App\Http\Controllers\Student\LessonController as StudentLessonController;
 use App\Http\Controllers\Student\MonthlyTestController as StudentMonthlyTestController;
 use App\Http\Controllers\Student\PapersController;
@@ -75,6 +76,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::prefix('student')->group(function () {
+        Route::post('lessons/{lesson}/attendance', [StudentAttendanceController::class, 'store']);
         Route::get('timetable', [StudentTimeTableController::class, 'index']);
         Route::get('subjects', [StudentSubjectController::class, 'index']);
         Route::get('lessons', [StudentLessonController::class, 'index']);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Models\Lesson;
 use App\Models\LessonMedia;
+use App\Models\Student;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,16 @@ class LessonController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        $user = $request->user();
+        if (! $user) {
+            return response()->json(['data' => []]);
+        }
+
+        $student = Student::where('user_id', $user->id)->first();
+        if (! $student) {
+            return response()->json(['data' => []]);
+        }
+
         $latestMedia = LessonMedia::query()
             ->select('lesson_id', DB::raw('MAX(id) as media_id'))
             ->where('provider', 'youtube')
@@ -24,6 +35,8 @@ class LessonController extends Controller
                 $join->on('latest_media.lesson_id', '=', 'lessons.id');
             })
             ->leftJoin('lesson_media as lm', 'lm.id', '=', 'latest_media.media_id')
+            ->where('lessons.level_id', $student->level_id)
+            ->where('lessons.class_id', $student->class_id)
             ->select(
                 'lessons.id',
                 'lessons.title',
@@ -54,6 +67,20 @@ class LessonController extends Controller
 
     public function show(Request $request, Lesson $lesson): JsonResponse
     {
+        $user = $request->user();
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized.'], 401);
+        }
+
+        $student = Student::where('user_id', $user->id)->first();
+        if (! $student) {
+            return response()->json(['message' => 'Student profile not found.'], 404);
+        }
+
+        if ($lesson->level_id !== $student->level_id || $lesson->class_id !== $student->class_id) {
+            return response()->json(['message' => 'Lesson not found.'], 404);
+        }
+
         $media = LessonMedia::query()
             ->where('lesson_id', $lesson->id)
             ->where('provider', 'youtube')
