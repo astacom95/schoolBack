@@ -10,6 +10,8 @@ use App\Models\Subject;
 use App\Models\Teacher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class LessonController extends Controller
 {
@@ -70,6 +72,34 @@ class LessonController extends Controller
             return response()->json(['data' => [], 'teacher' => null]);
         }
 
+        $teacherImage = $teacher->personal_image_path;
+        if ($teacherImage && ! Str::startsWith($teacherImage, ['http://', 'https://'])) {
+            $teacherImage = Storage::url($teacherImage);
+        }
+
+        $specializations = Specialization::query()
+            ->where('specializations.teacher_id', $teacher->id)
+            ->leftJoin('subjects', 'subjects.id', '=', 'specializations.subject_id')
+            ->leftJoin('levels', 'levels.id', '=', 'specializations.level_id')
+            ->leftJoin('classes', 'classes.id', '=', 'specializations.class_id')
+            ->select(
+                'specializations.id',
+                'subjects.name as subject_name',
+                'levels.name as level_name',
+                'classes.name as class_name'
+            )
+            ->orderBy('subjects.name')
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'id' => $row->id,
+                    'subject_name' => $row->subject_name,
+                    'level_name' => $row->level_name,
+                    'class_name' => $row->class_name,
+                ];
+            })
+            ->values();
+
         $subjectIds = Specialization::where('teacher_id', $teacher->id)
             ->pluck('subject_id')
             ->unique()
@@ -82,6 +112,8 @@ class LessonController extends Controller
                     'name' => $teacher->full_name,
                     'email' => $teacher->user?->email,
                     'phone_number' => $teacher->user?->phone_number,
+                    'personal_image_url' => $teacherImage,
+                    'specializations' => $specializations,
                 ],
             ]);
         }
@@ -96,6 +128,8 @@ class LessonController extends Controller
                     'name' => $teacher->full_name,
                     'email' => $teacher->user?->email,
                     'phone_number' => $teacher->user?->phone_number,
+                    'personal_image_url' => $teacherImage,
+                    'specializations' => $specializations,
                 ],
             ]);
         }
@@ -139,6 +173,8 @@ class LessonController extends Controller
                     'name' => $teacher->full_name,
                     'email' => $teacher->user?->email,
                     'phone_number' => $teacher->user?->phone_number,
+                    'personal_image_url' => $teacherImage,
+                    'specializations' => $specializations,
                 ],
             ]);
         }
@@ -180,6 +216,8 @@ class LessonController extends Controller
                 'name' => $teacher->full_name,
                 'email' => $teacher->user?->email,
                 'phone_number' => $teacher->user?->phone_number,
+                'personal_image_url' => $teacherImage,
+                'specializations' => $specializations,
             ],
         ]);
     }
