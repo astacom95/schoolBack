@@ -262,6 +262,7 @@ id BIGINT PK
 subject_id FK → subjects.id
 level_id FK → levels.id
 class_id FK → classes.id
+teacher_id FK → teachers.id
 test_url STRING
 created_at TIMESTAMP
 updated_at TIMESTAMP
