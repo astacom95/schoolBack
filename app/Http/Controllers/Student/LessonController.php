@@ -24,6 +24,8 @@ class LessonController extends Controller
             return response()->json(['data' => []]);
         }
 
+        $subjectId = (int) $request->query('subject_id', 0);
+
         $latestMedia = LessonMedia::query()
             ->select('lesson_id', DB::raw('MAX(id) as media_id'))
             ->where('provider', 'youtube')
@@ -37,14 +39,17 @@ class LessonController extends Controller
             ->leftJoin('lesson_media as lm', 'lm.id', '=', 'latest_media.media_id')
             ->where('lessons.level_id', $student->level_id)
             ->where('lessons.class_id', $student->class_id)
+            ->when($subjectId > 0, fn ($query) => $query->where('lessons.subject_id', $subjectId))
             ->select(
                 'lessons.id',
                 'lessons.title',
+                'lessons.subject_id',
                 'lessons.summary',
                 'subjects.name as subject_name',
                 'lessons.created_at',
                 'lm.yt_video_id',
-                'lm.status'
+                'lm.status',
+                'lm.id as media_id'
             )
             ->orderByDesc('lessons.created_at')
             ->get()
@@ -54,11 +59,13 @@ class LessonController extends Controller
                     'id' => $lesson->id,
                     'title' => $lesson->title,
                     'summary' => $lesson->summary,
+                    'subject_id' => $lesson->subject_id,
                     'subject_name' => $lesson->subject_name,
                     'created_at' => optional($lesson->created_at)->toDateString(),
                     'watch_url' => $videoId ? "https://www.youtube.com/watch?v={$videoId}" : null,
                     'embed_url' => $videoId ? "https://www.youtube.com/embed/{$videoId}" : null,
                     'is_live' => $lesson->status === 'live',
+                    'has_media' => (bool) $lesson->media_id,
                 ];
             });
 

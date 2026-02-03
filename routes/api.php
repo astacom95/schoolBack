@@ -44,6 +44,7 @@ Route::apiResource('manager/fees', FeeController::class)->only(['index', 'store'
 Route::apiResource('manager/students', StudentController::class)->only(['index', 'store'])->withoutMiddleware('auth:sanctum');
 Route::apiResource('manager/teachers', TeacherController::class)->only(['index', 'store'])->withoutMiddleware('auth:sanctum');
 Route::apiResource('manager/teacher-time-table', TeacherTimeTableController::class)->only(['index', 'store'])->withoutMiddleware('auth:sanctum');
+Route::apiResource('manager/guidance', GuidanceController::class)->only(['index', 'store', 'destroy'])->withoutMiddleware('auth:sanctum');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('manager')->group(function () {
@@ -54,7 +55,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('payments', [PaymentController::class, 'index']);
         Route::get('track-teachers', [TrackTeacherController::class, 'index']);
         Route::get('results', [ResultController::class, 'index']);
-        Route::apiResource('guidance', GuidanceController::class);
     });
 
     Route::prefix('teacher')->group(function () {
@@ -77,11 +77,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('student')->group(function () {
         Route::post('lessons/{lesson}/attendance', [StudentAttendanceController::class, 'store']);
+        Route::get('attendance/overall', [StudentAttendanceController::class, 'overall']);
         Route::get('timetable', [StudentTimeTableController::class, 'index']);
         Route::get('subjects', [StudentSubjectController::class, 'index']);
+        Route::get('subjects/{subject}', [StudentSubjectController::class, 'show']);
         Route::get('lessons', [StudentLessonController::class, 'index']);
         Route::get('lessons/{lesson}', [StudentLessonController::class, 'show']);
         Route::get('papers', [PapersController::class, 'index']);
+        Route::get('papers/{paper}', [PapersController::class, 'show']);
         Route::apiResource('monthly-tests', StudentMonthlyTestController::class)->only(['index', 'show', 'store']);
         Route::get('activities', [ActivityController::class, 'index']);
         Route::get('guidance', [StudentGuidanceController::class, 'index']);

@@ -22,9 +22,17 @@ class TimeTableController extends Controller
             return response()->json(['data' => []]);
         }
 
-        $entries = TeacherTimeTable::query()
+        $subjectId = (int) $request->query('subject_id', 0);
+
+        $query = TeacherTimeTable::query()
             ->where('level_id', $student->level_id)
-            ->where('class_id', $student->class_id)
+            ->where('class_id', $student->class_id);
+
+        if ($subjectId > 0) {
+            $query->where('subject_id', $subjectId);
+        }
+
+        $entries = $query
             ->with('subject')
             ->orderBy('day')
             ->orderBy('start_time')

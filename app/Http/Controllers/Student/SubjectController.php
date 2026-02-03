@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\Attendance;
 use App\Models\Student;
 use App\Models\Subject;
 use Illuminate\Http\JsonResponse;
@@ -44,5 +45,48 @@ class SubjectController extends Controller
             ->values();
 
         return response()->json(['data' => $subjects]);
+    }
+
+    public function show(Request $request, Subject $subject): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user) {
+            return response()->json(['message' => 'Unauthorized.'], 401);
+        }
+
+        $student = Student::where('user_id', $user->id)->first();
+        if (! $student) {
+            return response()->json(['message' => 'Student profile not found.'], 404);
+        }
+
+        if ($subject->level_id !== $student->level_id || $subject->class_id !== $student->class_id) {
+            return response()->json(['message' => 'Subject not found.'], 404);
+        }
+
+        $subject->load(['level', 'classroom']);
+
+        $attendance = Attendance::query()
+            ->where('student_id', $student->id)
+            ->where('subject_id', $subject->id)
+            ->where('level_id', $student->level_id)
+            ->where('class_id', $student->class_id)
+            ->first();
+
+        $bookThumbUrl = $subject->book_thumbnail ? Storage::url($subject->book_thumbnail) : null;
+
+        return response()->json([
+            'data' => [
+                'id' => $subject->id,
+                'name' => $subject->name,
+                'total_lessons' => $subject->total_lessons,
+                'total_degree' => $subject->total_degree,
+                'level_id' => $subject->level_id,
+                'class_id' => $subject->class_id,
+                'level' => $subject->level?->name,
+                'class' => $subject->classroom?->name,
+                'book_thumbnail' => $bookThumbUrl,
+                'attendance_count' => $attendance?->attendance_count ?? 0,
+            ],
+        ]);
     }
 }
