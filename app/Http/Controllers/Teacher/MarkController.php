@@ -27,8 +27,9 @@ class MarkController extends Controller
 
         $subjectId = (int) $request->query('subject_id', 0);
         $classId = (int) $request->query('class_id', 0);
+        $examPeriodId = (int) $request->query('exam_period_id', 0);
 
-        if ($subjectId <= 0 || $classId <= 0) {
+        if ($subjectId <= 0 || $classId <= 0 || $examPeriodId <= 0) {
             return response()->json(['data' => []]);
         }
 
@@ -53,6 +54,7 @@ class MarkController extends Controller
 
         $marks = Mark::where('subject_id', $subject->id)
             ->where('class_id', $subject->class_id)
+            ->where('exam_period_id', $examPeriodId)
             ->get()
             ->map(function (Mark $mark) {
                 return [
@@ -76,6 +78,7 @@ class MarkController extends Controller
         $data = $request->validate([
             'subject_id' => ['required', 'exists:subjects,id'],
             'class_id' => ['required', 'exists:classes,id'],
+            'exam_period_id' => ['required', 'exists:exams_period,id'],
             'marks' => ['required', 'array', 'min:1'],
             'marks.*.student_id' => ['required', 'exists:students,id'],
             'marks.*.degree' => ['required', 'integer', 'min:0'],
@@ -132,6 +135,7 @@ class MarkController extends Controller
                 [
                     'student_id' => $markRow['student_id'],
                     'subject_id' => $subject->id,
+                    'exam_period_id' => $data['exam_period_id'],
                 ],
                 [
                     'level_id' => $subject->level_id,

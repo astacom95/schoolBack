@@ -5,7 +5,13 @@ use App\Http\Controllers\LessonLiveController;
 use App\Http\Controllers\Manager\ClassController;
 use App\Http\Controllers\Manager\FeeController;
 use App\Http\Controllers\Manager\GuidanceController;
+use App\Http\Controllers\Manager\ExamPeriodController;
+use App\Http\Controllers\Manager\LessonSummaryController;
 use App\Http\Controllers\Manager\LevelController;
+use App\Http\Controllers\Manager\PapersWorkController;
+use App\Http\Controllers\Manager\QuizController;
+use App\Http\Controllers\Manager\ReportController as ManagerReportController;
+use App\Http\Controllers\Manager\TeacherTrackingController;
 use App\Http\Controllers\Manager\PaymentController;
 use App\Http\Controllers\Manager\ResultController;
 use App\Http\Controllers\Manager\StudentController;
@@ -19,6 +25,7 @@ use App\Http\Controllers\Student\LessonController as StudentLessonController;
 use App\Http\Controllers\Student\MonthlyTestController as StudentMonthlyTestController;
 use App\Http\Controllers\Student\PapersController;
 use App\Http\Controllers\Student\GuidanceController as StudentGuidanceController;
+use App\Http\Controllers\Student\ProfileController as StudentProfileController;
 use App\Http\Controllers\Student\ResultController as StudentResultController;
 use App\Http\Controllers\Student\SubjectController as StudentSubjectController;
 use App\Http\Controllers\Student\TimeTableController as StudentTimeTableController;
@@ -32,11 +39,17 @@ use App\Http\Controllers\Teacher\SubjectController as TeacherSubjectController;
 use App\Http\Controllers\Teacher\ReportController as TeacherReportController;
 use App\Http\Controllers\Teacher\PapersWorkController as TeacherPapersWorkController;
 use App\Http\Controllers\Teacher\TimeTableController;
+use App\Http\Controllers\Teacher\ProfileController as TeacherProfileController;
 use App\Http\Controllers\Streaming\CloudflareWebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/manager/students/public', [StudentController::class, 'index'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/teachers/public', [TeacherController::class, 'index'])->withoutMiddleware('auth:sanctum');
+Route::get('/manager/lesson-summaries', [LessonSummaryController::class, 'index'])->withoutMiddleware('auth:sanctum');
+Route::get('/manager/quizzes', [QuizController::class, 'index'])->withoutMiddleware('auth:sanctum');
+Route::get('/manager/papers-work', [PapersWorkController::class, 'index'])->withoutMiddleware('auth:sanctum');
+Route::get('/manager/reports', [ManagerReportController::class, 'index'])->withoutMiddleware('auth:sanctum');
+Route::get('/manager/teacher-tracking', [TeacherTrackingController::class, 'index'])->withoutMiddleware('auth:sanctum');
 
 Route::apiResource('manager/levels', LevelController::class)->only(['index', 'store', 'destroy'])->withoutMiddleware('auth:sanctum');
 Route::apiResource('manager/subjects', SubjectController::class)->only(['index', 'store', 'destroy'])->withoutMiddleware('auth:sanctum');
@@ -45,6 +58,7 @@ Route::apiResource('manager/students', StudentController::class)->only(['index',
 Route::apiResource('manager/teachers', TeacherController::class)->only(['index', 'store'])->withoutMiddleware('auth:sanctum');
 Route::apiResource('manager/teacher-time-table', TeacherTimeTableController::class)->only(['index', 'store'])->withoutMiddleware('auth:sanctum');
 Route::apiResource('manager/guidance', GuidanceController::class)->only(['index', 'store', 'destroy'])->withoutMiddleware('auth:sanctum');
+Route::apiResource('manager/exams-period', ExamPeriodController::class)->only(['index', 'store'])->withoutMiddleware('auth:sanctum');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('manager')->group(function () {
@@ -58,6 +72,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::prefix('teacher')->group(function () {
+        Route::get('profile', [TeacherProfileController::class, 'show']);
         Route::post('lessons/{lesson}/start-live-youtube', [LessonLiveController::class, 'startLive']);
         Route::get('lessons/{lesson}/whip', [TeacherLessonController::class, 'whip']);
         Route::get('subjects', [TeacherSubjectController::class, 'index']);
@@ -70,12 +85,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('lessons', TeacherLessonController::class);
         Route::post('lessons/{lesson}/start-live', [LiveStreamController::class, 'start']);
         Route::get('lessons/{lesson}/insights', [TeacherLessonController::class, 'insights']);
+        Route::get('attendance/summary', [AttendanceController::class, 'summary']);
         Route::apiResource('attendance', AttendanceController::class)->only(['index', 'store']);
         Route::apiResource('marks', MarkController::class);
         Route::apiResource('monthly-tests', MonthlyTestController::class);
     });
 
     Route::prefix('student')->group(function () {
+        Route::get('profile', [StudentProfileController::class, 'show']);
         Route::post('lessons/{lesson}/attendance', [StudentAttendanceController::class, 'store']);
         Route::get('attendance/overall', [StudentAttendanceController::class, 'overall']);
         Route::get('timetable', [StudentTimeTableController::class, 'index']);

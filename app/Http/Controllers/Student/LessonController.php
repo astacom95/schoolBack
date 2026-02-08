@@ -5,10 +5,14 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Models\Lesson;
 use App\Models\LessonMedia;
+use App\Models\Quiz;
 use App\Models\Student;
+use App\Models\Subject;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class LessonController extends Controller
 {
@@ -95,6 +99,12 @@ class LessonController extends Controller
             ->first();
 
         $videoId = $media?->yt_video_id;
+        $subjectName = $lesson->subject_id ? Subject::where('id', $lesson->subject_id)->value('name') : null;
+        $quiz = Quiz::where('lesson_id', $lesson->id)->first();
+        $quizUrl = $quiz?->quiz_url;
+        if ($quizUrl && ! Str::startsWith($quizUrl, ['http://', 'https://'])) {
+            $quizUrl = Storage::url($quizUrl);
+        }
 
         return response()->json([
             'data' => [
@@ -102,10 +112,13 @@ class LessonController extends Controller
                 'title' => $lesson->title,
                 'summary' => $lesson->summary,
                 'subject_id' => $lesson->subject_id,
+                'subject_name' => $subjectName,
                 'created_at' => optional($lesson->created_at)->toDateString(),
                 'watch_url' => $videoId ? "https://www.youtube.com/watch?v={$videoId}" : null,
                 'embed_url' => $videoId ? "https://www.youtube.com/embed/{$videoId}" : null,
                 'is_live' => $media?->status === 'live',
+                'quiz_url' => $quiz?->quiz_url,
+                'quiz_url_display' => $quizUrl,
             ],
         ]);
     }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Teacher;
 use App\Http\Controllers\Controller;
 use App\Models\Lesson;
 use App\Models\LessonMedia;
+use App\Models\Quiz;
 use App\Models\Specialization;
 use App\Models\Subject;
 use App\Models\Teacher;
@@ -31,6 +32,8 @@ class LessonController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'summary' => ['required', 'string'],
             'subject_id' => ['required', 'exists:subjects,id'],
+            'quiz_file' => ['nullable', 'file', 'max:20480'],
+            'quiz_url' => ['nullable', 'string', 'max:2048'],
         ]);
 
         $allowedSubject = Specialization::where('teacher_id', $teacher->id)
@@ -50,6 +53,20 @@ class LessonController extends Controller
             'level_id' => $subject->level_id,
             'class_id' => $subject->class_id,
         ]);
+
+        $quizPath = null;
+        if ($request->hasFile('quiz_file')) {
+            $quizPath = $request->file('quiz_file')->store('quizzes', 'public');
+        } elseif (! empty($data['quiz_url'])) {
+            $quizPath = $data['quiz_url'];
+        }
+
+        if ($quizPath) {
+            Quiz::query()->create([
+                'lesson_id' => $lesson->id,
+                'quiz_url' => $quizPath,
+            ]);
+        }
 
         return response()->json([
             'data' => [

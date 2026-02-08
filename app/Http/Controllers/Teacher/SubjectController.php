@@ -9,6 +9,7 @@ use App\Models\Teacher;
 use App\Models\Lesson;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class SubjectController extends Controller
@@ -30,15 +31,34 @@ class SubjectController extends Controller
             ->unique()
             ->values();
 
+        $lessonsCounts = Lesson::query()
+            ->whereIn('subject_id', $subjectIds)
+            ->select('subject_id', DB::raw('COUNT(*) as total_lessons_count'))
+            ->groupBy('subject_id')
+            ->pluck('total_lessons_count', 'subject_id');
+
+        $recordedCounts = Lesson::query()
+            ->whereIn('lessons.subject_id', $subjectIds)
+            ->leftJoin('lesson_media', function ($join) {
+                $join->on('lesson_media.lesson_id', '=', 'lessons.id')
+                    ->where('lesson_media.is_active', true);
+            })
+            ->select('lessons.subject_id', DB::raw('COUNT(DISTINCT lesson_media.lesson_id) as recorded_count'))
+            ->groupBy('lessons.subject_id')
+            ->pluck('recorded_count', 'lessons.subject_id');
+
         $subjects = Subject::with(['level', 'classroom'])
             ->whereIn('id', $subjectIds)
             ->get()
-            ->map(function (Subject $subject) {
+            ->map(function (Subject $subject) use ($lessonsCounts, $recordedCounts) {
                 $bookThumbUrl = $subject->book_thumbnail ? Storage::url($subject->book_thumbnail) : null;
+                $totalLessons = $subject->total_lessons ?? (int) ($lessonsCounts[$subject->id] ?? 0);
+                $recordedLessons = (int) ($recordedCounts[$subject->id] ?? 0);
                 return [
                     'id' => $subject->id,
                     'name' => $subject->name,
-                    'total_lessons' => $subject->total_lessons,
+                    'total_lessons' => $totalLessons,
+                    'recorded_lessons' => $recordedLessons,
                     'total_degree' => $subject->total_degree,
                     'level_id' => $subject->level_id,
                     'class_id' => $subject->class_id,
