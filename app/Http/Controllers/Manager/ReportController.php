@@ -22,6 +22,7 @@ class ReportController extends Controller
                     'teacher_name' => $report->teacher?->full_name,
                     'subject_name' => $report->subject?->name,
                     'level_name' => $report->level?->name,
+                    'class_id' => $report->class_id,
                     'class_name' => $report->classroom?->name,
                     'student_subject_performance' => $report->student_subject_performance,
                     'homework_commitment' => $report->homework_commitment,

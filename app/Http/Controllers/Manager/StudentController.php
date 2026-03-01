@@ -16,33 +16,59 @@ use Illuminate\Support\Str;
 
 class StudentController extends Controller
 {
+    private function transformStudent(Student $student, ?float $paidAmount = null, ?float $totalFee = null): array
+    {
+        $resolvedPaidAmount = $paidAmount ?? (float) Payment::query()->where('student_id', $student->id)->sum('amount');
+        $resolvedTotalFee = $totalFee ?? (float) Fee::query()->where('class_id', $student->class_id)->value('total_fee');
+
+        return [
+            'id' => $student->id,
+            'full_name' => $student->full_name,
+            'email' => $student->user->email ?? null,
+            'phone_number' => $student->student_phone_number ?? $student->user->phone_number ?? null,
+            'level_id' => $student->level_id,
+            'level' => $student->level->name ?? null,
+            'class_id' => $student->class_id,
+            'class' => $student->classroom->name ?? null,
+            'gender' => $student->gender,
+            'guardian_name' => $student->guardian_name,
+            'date_of_birth' => $student->date_of_birth,
+            'created_at' => optional($student->created_at)->toDateString(),
+            'country' => $student->country,
+            'state' => $student->state,
+            'city' => $student->city,
+            'certificate_path' => $student->certificate_path ? Storage::url($student->certificate_path) : null,
+            'personal_image_path' => $student->personal_image_path ? Storage::url($student->personal_image_path) : null,
+            'paid_amount' => $resolvedPaidAmount,
+            'total_fee' => $resolvedTotalFee,
+            'remaining_amount' => max($resolvedTotalFee - $resolvedPaidAmount, 0),
+        ];
+    }
+
     public function index()
     {
         $students = Student::query()
             ->with(['user', 'level', 'classroom'])
             ->latest('id')
             ->take(200)
-            ->get()
-            ->map(function (Student $student) {
-                $personalImageUrl = $student->personal_image_path ? Storage::url($student->personal_image_path) : null;
-                $certificateUrl = $student->certificate_path ? Storage::url($student->certificate_path) : null;
-                return [
-                    'id' => $student->id,
-                    'full_name' => $student->full_name,
-                    'email' => $student->user->email ?? null,
-                    'phone_number' => $student->student_phone_number ?? $student->user->phone_number ?? null,
-                    'level' => $student->level->name ?? null,
-                    'class' => $student->classroom->name ?? null,
-                    'gender' => $student->gender,
-                    'guardian_name' => $student->guardian_name,
-                    'date_of_birth' => $student->date_of_birth,
-                    'created_at' => optional($student->created_at)->toDateString(),
-                    'country' => $student->country,
-                    'state' => $student->state,
-                    'city' => $student->city,
-                    'certificate_path' => $certificateUrl,
-                    'personal_image_path' => $personalImageUrl,
-                ];
+            ->get();
+
+        $paymentSumsByStudent = Payment::query()
+            ->selectRaw('student_id, SUM(amount) as total_paid')
+            ->whereIn('student_id', $students->pluck('id'))
+            ->groupBy('student_id')
+            ->pluck('total_paid', 'student_id');
+
+        $feesByClass = Fee::query()
+            ->whereIn('class_id', $students->pluck('class_id')->filter()->unique())
+            ->pluck('total_fee', 'class_id');
+
+        $students = $students
+            ->map(function (Student $student) use ($paymentSumsByStudent, $feesByClass) {
+                $paidAmount = (float) ($paymentSumsByStudent[$student->id] ?? 0);
+                $totalFee = (float) ($feesByClass[$student->class_id] ?? 0);
+
+                return $this->transformStudent($student, $paidAmount, $totalFee);
             });
 
         return response()->json(['data' => $students]);
@@ -143,23 +169,70 @@ class StudentController extends Controller
         });
 
         return response()->json([
-            'data' => [
-                'id' => $student->id,
-                'full_name' => $student->full_name,
-                'email' => $student->user->email ?? null,
-                'phone_number' => $student->student_phone_number ?? $student->user->phone_number ?? null,
-                'level' => $student->level->name ?? null,
-                'class' => $student->classroom->name ?? null,
-                'gender' => $student->gender,
-                'guardian_name' => $student->guardian_name,
-                'date_of_birth' => $student->date_of_birth,
-                'created_at' => optional($student->created_at)->toDateString(),
-                'country' => $student->country,
-                'state' => $student->state,
-                'city' => $student->city,
-                'certificate_path' => $student->certificate_path,
-                'personal_image_path' => $student->personal_image_path,
-            ],
+            'data' => $this->transformStudent($student),
         ], 201);
+    }
+
+    public function update(Request $request, Student $student)
+    {
+        $data = $request->validate([
+            'full_name' => ['required', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255', 'unique:users,email,' . $student->user_id],
+            'phone_number' => ['required', 'string', 'max:255'],
+            'gender' => ['required', 'in:Male,Female'],
+            'date_of_birth' => ['nullable', 'date'],
+            'guardian_name' => ['required', 'string', 'max:255'],
+            'country' => ['nullable', 'string', 'max:255'],
+            'state' => ['nullable', 'string', 'max:255'],
+            'city' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        DB::transaction(function () use ($student, $data) {
+            if ($student->user) {
+                $student->user->update([
+                    'email' => $data['email'] ?? null,
+                    'phone_number' => $data['phone_number'],
+                ]);
+            }
+
+            $student->update([
+                'full_name' => $data['full_name'],
+                'student_phone_number' => $data['phone_number'],
+                'gender' => $data['gender'],
+                'date_of_birth' => $data['date_of_birth'] ?? $student->date_of_birth,
+                'guardian_name' => $data['guardian_name'],
+                'country' => $data['country'] ?? '',
+                'state' => $data['state'] ?? '',
+                'city' => $data['city'] ?? '',
+            ]);
+        });
+
+        $student->load(['user', 'level', 'classroom']);
+
+        return response()->json([
+            'data' => $this->transformStudent($student),
+        ]);
+    }
+
+    public function destroy(Student $student)
+    {
+        DB::transaction(function () use ($student) {
+            if ($student->certificate_path) {
+                Storage::disk('public')->delete($student->certificate_path);
+            }
+
+            if ($student->personal_image_path) {
+                Storage::disk('public')->delete($student->personal_image_path);
+            }
+
+            if ($student->user) {
+                $student->user->delete();
+                return;
+            }
+
+            $student->delete();
+        });
+
+        return response()->json(['message' => 'تم حذف الطالب بنجاح.']);
     }
 }

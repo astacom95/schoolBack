@@ -11,6 +11,7 @@ use App\Http\Controllers\Manager\LevelController;
 use App\Http\Controllers\Manager\PapersWorkController;
 use App\Http\Controllers\Manager\QuizController;
 use App\Http\Controllers\Manager\ReportController as ManagerReportController;
+use App\Http\Controllers\Manager\SettingController;
 use App\Http\Controllers\Manager\TeacherTrackingController;
 use App\Http\Controllers\Manager\PaymentController;
 use App\Http\Controllers\Manager\ResultController;
@@ -50,22 +51,24 @@ Route::get('/manager/quizzes', [QuizController::class, 'index'])->withoutMiddlew
 Route::get('/manager/papers-work', [PapersWorkController::class, 'index'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/reports', [ManagerReportController::class, 'index'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/teacher-tracking', [TeacherTrackingController::class, 'index'])->withoutMiddleware('auth:sanctum');
+Route::get('/manager/settings', [SettingController::class, 'show'])->withoutMiddleware('auth:sanctum');
+Route::post('/manager/settings', [SettingController::class, 'store'])->withoutMiddleware('auth:sanctum');
 
-Route::apiResource('manager/levels', LevelController::class)->only(['index', 'store', 'destroy'])->withoutMiddleware('auth:sanctum');
-Route::apiResource('manager/subjects', SubjectController::class)->only(['index', 'store', 'destroy'])->withoutMiddleware('auth:sanctum');
-Route::apiResource('manager/fees', FeeController::class)->only(['index', 'store'])->withoutMiddleware('auth:sanctum');
-Route::apiResource('manager/students', StudentController::class)->only(['index', 'store'])->withoutMiddleware('auth:sanctum');
-Route::apiResource('manager/teachers', TeacherController::class)->only(['index', 'store'])->withoutMiddleware('auth:sanctum');
-Route::apiResource('manager/teacher-time-table', TeacherTimeTableController::class)->only(['index', 'store'])->withoutMiddleware('auth:sanctum');
+Route::apiResource('manager/levels', LevelController::class)->only(['index', 'store', 'update', 'destroy'])->withoutMiddleware('auth:sanctum');
+Route::apiResource('manager/subjects', SubjectController::class)->only(['index', 'store', 'update', 'destroy'])->withoutMiddleware('auth:sanctum');
+Route::apiResource('manager/fees', FeeController::class)->only(['index', 'store', 'update'])->withoutMiddleware('auth:sanctum');
+Route::apiResource('manager/students', StudentController::class)->only(['index', 'store', 'update', 'destroy'])->withoutMiddleware('auth:sanctum');
+Route::apiResource('manager/teachers', TeacherController::class)->only(['index', 'store', 'update', 'destroy'])->withoutMiddleware('auth:sanctum');
+Route::apiResource('manager/teacher-time-table', TeacherTimeTableController::class)->only(['index', 'store', 'update'])->withoutMiddleware('auth:sanctum');
 Route::apiResource('manager/guidance', GuidanceController::class)->only(['index', 'store', 'destroy'])->withoutMiddleware('auth:sanctum');
 Route::apiResource('manager/exams-period', ExamPeriodController::class)->only(['index', 'store'])->withoutMiddleware('auth:sanctum');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('manager')->group(function () {
-        Route::apiResource('teachers', TeacherController::class)->except(['index', 'store']);
-        Route::apiResource('students', StudentController::class)->except(['index', 'store']);
+        Route::apiResource('teachers', TeacherController::class)->except(['index', 'store', 'update', 'destroy']);
+        Route::apiResource('students', StudentController::class)->except(['index', 'store', 'update', 'destroy']);
         Route::apiResource('classes', ClassController::class);
-        Route::apiResource('fees', FeeController::class)->except(['index', 'store']);
+        Route::apiResource('fees', FeeController::class)->except(['index', 'store', 'update']);
         Route::get('payments', [PaymentController::class, 'index']);
         Route::get('track-teachers', [TrackTeacherController::class, 'index']);
         Route::get('results', [ResultController::class, 'index']);
