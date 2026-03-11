@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\LessonLiveController;
 use App\Http\Controllers\Manager\ClassController;
+use App\Http\Controllers\Manager\AttendanceAnalyticsController;
 use App\Http\Controllers\Manager\FeeController;
 use App\Http\Controllers\Manager\GuidanceController;
 use App\Http\Controllers\Manager\ExamPeriodController;
@@ -52,6 +53,8 @@ Route::get('/manager/papers-work', [PapersWorkController::class, 'index'])->with
 Route::get('/manager/reports', [ManagerReportController::class, 'index'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/teacher-tracking', [TeacherTrackingController::class, 'index'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/settings', [SettingController::class, 'show'])->withoutMiddleware('auth:sanctum');
+Route::get('/manager/attendance/daily-summary', [AttendanceAnalyticsController::class, 'dailySummary'])->withoutMiddleware('auth:sanctum');
+Route::get('/manager/payments/analytics', [PaymentController::class, 'index'])->withoutMiddleware('auth:sanctum');
 Route::post('/manager/settings', [SettingController::class, 'store'])->withoutMiddleware('auth:sanctum');
 
 Route::apiResource('manager/levels', LevelController::class)->only(['index', 'store', 'update', 'destroy'])->withoutMiddleware('auth:sanctum');

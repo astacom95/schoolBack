@@ -11,7 +11,9 @@ class Setting extends Model
     protected $fillable = [
         'school_name',
         'slogan',
+        'description',
         'school_logo',
+        'background_image',
         'school_color',
     ];
 }
