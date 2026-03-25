@@ -87,14 +87,15 @@ class LessonLiveController extends Controller
             escapeshellarg($outputUrl)
         );
 
+        $logFile = storage_path('logs/ffmpeg-restream.log');
         $command = sprintf(
-            'for i in {1..30}; do %s && exit 0; sleep 2; done; exit 1',
-            $ffmpegCmd
+            'for i in {1..30}; do %s >> %s 2>&1 && exit 0; sleep 2; done; exit 1',
+            $ffmpegCmd,
+            escapeshellarg($logFile)
         );
 
         $process = Process::fromShellCommandline($command);
         $process->setTimeout(null);
-        $process->disableOutput();
         $process->start();
     }
 }
