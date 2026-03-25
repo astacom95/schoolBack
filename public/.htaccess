@@ -1,5 +1,5 @@
-php_value upload_max_filesize 128M
-php_value post_max_size 128M
+# php_value upload_max_filesize 128M
+# php_value post_max_size 128M
 LimitRequestBody 134217728
 
 <IfModule mod_rewrite.c>

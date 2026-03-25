@@ -358,7 +358,8 @@ class LessonController extends Controller
         $baseUrl = config('services.srs.whip_base_url', env('SRS_WHIP_BASE_URL', 'http://localhost:1985/rtc/v1/whip'));
         $app = env('SRS_WHIP_APP', 'live');
         $streamName = 'lesson-' . $lesson->id;
-        $whipUrl = rtrim($baseUrl, '/') . '/?app=' . urlencode($app) . '&stream=' . urlencode($streamName);
+        $separator = str_contains($baseUrl, '?') ? '&' : '?';
+        $whipUrl = rtrim($baseUrl, '/') . $separator . 'app=' . urlencode($app) . '&stream=' . urlencode($streamName);
 
         return response()->json([
             'lesson_id' => $lesson->id,
