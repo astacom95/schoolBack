@@ -24,6 +24,10 @@ return [
         'rtmp_base_url' => env('SRS_RTMP_BASE_URL', 'rtmp://localhost/live'),
         'whip_app' => env('SRS_WHIP_APP', 'live'),
         'ffmpeg_path' => env('FFMPEG_PATH', 'ffmpeg'),
+        'restream_audio_bitrate' => env('RESTREAM_AUDIO_BITRATE', '192k'),
+        'restream_audio_rate' => env('RESTREAM_AUDIO_RATE', 44100),
+        'restream_audio_channels' => env('RESTREAM_AUDIO_CHANNELS', 1),
+        'restream_audio_filter' => env('RESTREAM_AUDIO_FILTER', 'afftdn=nr=15:nt=w'),
     ],
 
     'postmark' => [

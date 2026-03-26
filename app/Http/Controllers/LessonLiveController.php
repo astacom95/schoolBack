@@ -80,14 +80,50 @@ class LessonLiveController extends Controller
         $outputUrl = rtrim($rtmpsUrl, '/') . '/' . $streamKey;
 
         $ffmpegPath = config('services.srs.ffmpeg_path', env('FFMPEG_PATH', 'ffmpeg'));
+        $audioBitrate = (string) config('services.srs.restream_audio_bitrate', env('RESTREAM_AUDIO_BITRATE', '192k'));
+        if (! preg_match('/^\d+k$/i', $audioBitrate)) {
+            $audioBitrate = '192k';
+        }
+
+        $audioRate = (int) config('services.srs.restream_audio_rate', env('RESTREAM_AUDIO_RATE', 44100));
+        if ($audioRate <= 0) {
+            $audioRate = 44100;
+        }
+
+        $audioChannels = (int) config('services.srs.restream_audio_channels', env('RESTREAM_AUDIO_CHANNELS', 1));
+        if (! in_array($audioChannels, [1, 2], true)) {
+            $audioChannels = 1;
+        }
+
+        $audioFilter = trim((string) config('services.srs.restream_audio_filter', env('RESTREAM_AUDIO_FILTER', 'afftdn=nr=15:nt=w')));
+        if ($audioFilter === '') {
+            $audioFilter = 'afftdn=nr=15:nt=w';
+        }
+
         $ffmpegCmd = sprintf(
-            '%s -re -i %s -c copy -f flv %s',
+            '%s -re -i %s -c:v copy -c:a aac -b:a %s -ar %d -ac %d -af %s -f flv %s',
             escapeshellcmd($ffmpegPath),
             escapeshellarg($inputUrl),
+            escapeshellarg($audioBitrate),
+            $audioRate,
+            $audioChannels,
+            escapeshellarg($audioFilter),
             escapeshellarg($outputUrl)
         );
 
         $logFile = storage_path('logs/ffmpeg-restream.log');
+        $sanitizedOutputUrl = rtrim($rtmpsUrl, '/') . '/[REDACTED_STREAM_KEY]';
+        $sanitizedFfmpegCmd = str_replace(
+            escapeshellarg($outputUrl),
+            escapeshellarg($sanitizedOutputUrl),
+            $ffmpegCmd
+        );
+        file_put_contents(
+            $logFile,
+            sprintf("[%s] Starting restream command: %s\n", now()->toIso8601String(), $sanitizedFfmpegCmd),
+            FILE_APPEND
+        );
+
         $command = sprintf(
             'for i in {1..30}; do %s >> %s 2>&1 && exit 0; sleep 2; done; exit 1',
             $ffmpegCmd,
