@@ -81,6 +81,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('profile', [TeacherProfileController::class, 'show']);
         Route::post('lessons/{lesson}/start-live-youtube', [LessonLiveController::class, 'startLive']);
         Route::get('lessons/{lesson}/whip', [TeacherLessonController::class, 'whip']);
+        Route::get('lessons/{lesson}/obs', [TeacherLessonController::class, 'obs']);
         Route::get('subjects', [TeacherSubjectController::class, 'index']);
         Route::get('subjects/{subject}', [TeacherSubjectController::class, 'show']);
         Route::get('students', [TeacherStudentController::class, 'index']);
