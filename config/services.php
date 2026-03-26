@@ -27,7 +27,9 @@ return [
         'restream_audio_bitrate' => env('RESTREAM_AUDIO_BITRATE', '192k'),
         'restream_audio_rate' => env('RESTREAM_AUDIO_RATE', 44100),
         'restream_audio_channels' => env('RESTREAM_AUDIO_CHANNELS', 1),
-        'restream_audio_filter' => env('RESTREAM_AUDIO_FILTER', 'afftdn=nr=15:nt=w'),
+        'restream_audio_filter_base' => env('RESTREAM_AUDIO_FILTER_BASE', 'highpass=f=150,lowpass=f=5000,afftdn=nr=12:nt=w'),
+        'restream_audio_enable_rnnoise' => env('RESTREAM_AUDIO_ENABLE_RNNOISE', false),
+        'restream_rnnoise_model_path' => env('RESTREAM_RNNOISE_MODEL_PATH', '/usr/local/share/rnnoise/cb.rnnn'),
     ],
 
     'postmark' => [

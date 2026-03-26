@@ -95,9 +95,19 @@ class LessonLiveController extends Controller
             $audioChannels = 1;
         }
 
-        $audioFilter = trim((string) config('services.srs.restream_audio_filter', env('RESTREAM_AUDIO_FILTER', 'afftdn=nr=15:nt=w')));
-        if ($audioFilter === '') {
-            $audioFilter = 'afftdn=nr=15:nt=w';
+        $audioFilterBase = trim((string) config('services.srs.restream_audio_filter_base', env('RESTREAM_AUDIO_FILTER_BASE', 'highpass=f=150,lowpass=f=5000,afftdn=nr=12:nt=w')));
+        if ($audioFilterBase === '') {
+            $audioFilterBase = 'highpass=f=150,lowpass=f=5000,afftdn=nr=12:nt=w';
+        }
+
+        $enableRnnoise = filter_var(
+            config('services.srs.restream_audio_enable_rnnoise', env('RESTREAM_AUDIO_ENABLE_RNNOISE', false)),
+            FILTER_VALIDATE_BOOLEAN
+        );
+        $rnnoiseModelPath = trim((string) config('services.srs.restream_rnnoise_model_path', env('RESTREAM_RNNOISE_MODEL_PATH', '/usr/local/share/rnnoise/cb.rnnn')));
+        $audioFilter = $audioFilterBase;
+        if ($enableRnnoise && $rnnoiseModelPath !== '' && is_file($rnnoiseModelPath)) {
+            $audioFilter .= ',arnndn=m=' . $rnnoiseModelPath;
         }
 
         $ffmpegCmd = sprintf(
