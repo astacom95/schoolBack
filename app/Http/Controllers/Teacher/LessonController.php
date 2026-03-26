@@ -337,35 +337,9 @@ class LessonController extends Controller
 
     public function whip(Request $request, Lesson $lesson): JsonResponse
     {
-        $user = $request->user();
-        if (! $user) {
-            return response()->json(['message' => 'غير مصرح.'], 401);
-        }
-
-        $teacher = Teacher::where('user_id', $user->id)->first();
-        if (! $teacher) {
-            return response()->json(['message' => 'المعلم غير موجود.'], 404);
-        }
-
-        $allowedSubject = Specialization::where('teacher_id', $teacher->id)
-            ->where('subject_id', $lesson->subject_id)
-            ->exists();
-
-        if (! $allowedSubject) {
-            return response()->json(['message' => 'غير مصرح بهذا الدرس.'], 403);
-        }
-
-        $baseUrl = config('services.srs.whip_base_url', env('SRS_WHIP_BASE_URL', 'http://localhost:1985/rtc/v1/whip'));
-        $app = env('SRS_WHIP_APP', 'live');
-        $streamName = 'lesson-' . $lesson->id;
-        $normalizedBaseUrl = rtrim($baseUrl, '/') . '/';
-        $separator = str_contains($normalizedBaseUrl, '?') ? '&' : '?';
-        $whipUrl = $normalizedBaseUrl . $separator . 'app=' . urlencode($app) . '&stream=' . urlencode($streamName);
-
         return response()->json([
-            'lesson_id' => $lesson->id,
-            'whipUrl' => $whipUrl,
-        ]);
+            'message' => 'تم إيقاف البث من المتصفح. استخدم OBS.',
+        ], 410);
     }
 
     public function obs(Request $request, Lesson $lesson): JsonResponse
