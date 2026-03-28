@@ -13,24 +13,13 @@ return [
     | a conventional file to locate the various service credentials.
     |
     */
-'youtube' => [
-    'client_id' => env('YOUTUBE_CLIENT_ID'),
-    'client_secret' => env('YOUTUBE_CLIENT_SECRET'),
-    'redirect' => env('YOUTUBE_REDIRECT_URI'),
-],
-
     'srs' => [
         'whip_base_url' => env('SRS_WHIP_BASE_URL', 'http://localhost:1985/rtc/v1/whip'),
-        'rtmp_base_url' => env('SRS_RTMP_BASE_URL', 'rtmp://localhost/live'),
-        'rtmp_publish_url' => env('SRS_RTMP_PUBLISH_URL', 'rtmp://localhost/live'),
         'whip_app' => env('SRS_WHIP_APP', 'live'),
-        'ffmpeg_path' => env('FFMPEG_PATH', 'ffmpeg'),
-        'restream_audio_bitrate' => env('RESTREAM_AUDIO_BITRATE', '192k'),
-        'restream_audio_rate' => env('RESTREAM_AUDIO_RATE', 44100),
-        'restream_audio_channels' => env('RESTREAM_AUDIO_CHANNELS', 1),
-        'restream_audio_filter_base' => env('RESTREAM_AUDIO_FILTER_BASE', 'highpass=f=150,lowpass=f=5000,afftdn=nr=12:nt=w'),
-        'restream_audio_enable_rnnoise' => env('RESTREAM_AUDIO_ENABLE_RNNOISE', false),
-        'restream_rnnoise_model_path' => env('RESTREAM_RNNOISE_MODEL_PATH', '/usr/local/share/rnnoise/cb.rnnn'),
+        'playback_flv_base_url' => env('SRS_PLAYBACK_FLV_BASE_URL', 'http://localhost:8080/live'),
+        'recordings_path' => env('SRS_RECORDINGS_PATH', storage_path('app/srs-recordings')),
+        'wasabi_public_base_url' => env('WASABI_PUBLIC_BASE_URL', ''),
+        'wasabi_object_prefix' => env('WASABI_OBJECT_PREFIX', 'lessons'),
     ],
 
     'postmark' => [

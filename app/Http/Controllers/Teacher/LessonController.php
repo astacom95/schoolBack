@@ -296,14 +296,7 @@ class LessonController extends Controller
                 ->first();
         }
 
-        $videoId = $media?->yt_video_id;
-        $watchUrl = $videoId ? "https://www.youtube.com/watch?v={$videoId}" : null;
-        $embedUrl = $videoId ? "https://www.youtube.com/embed/{$videoId}" : null;
-        $videoUrl = $media?->source_url;
-
-        if (! $embedUrl && $media?->cf_vod_playback_id) {
-            $embedUrl = "https://iframe.videodelivery.net/{$media->cf_vod_playback_id}";
-        }
+        $playbackUrl = $media?->source_url;
 
         return response()->json([
             'data' => [
@@ -317,9 +310,10 @@ class LessonController extends Controller
                 'class_id' => $lessonDetails?->class_id ?? $lesson->class_id,
                 'class_name' => $lessonDetails?->class_name,
                 'created_at' => optional($lessonDetails?->created_at ?? $lesson->created_at)->toDateString(),
-                'watch_url' => $watchUrl,
-                'embed_url' => $embedUrl,
-                'video_url' => $videoUrl,
+                'watch_url' => $playbackUrl,
+                'embed_url' => null,
+                'video_url' => $playbackUrl,
+                'playback_url' => $playbackUrl,
                 'media' => $media ? [
                     'id' => $media->id,
                     'provider' => $media->provider,
@@ -329,48 +323,8 @@ class LessonController extends Controller
                     'duration_seconds' => $media->duration_seconds,
                     'source_url' => $media->source_url,
                     'cf_vod_playback_id' => $media->cf_vod_playback_id,
-                    'yt_video_id' => $media->yt_video_id,
                 ] : null,
             ],
-        ]);
-    }
-
-    public function whip(Request $request, Lesson $lesson): JsonResponse
-    {
-        return response()->json([
-            'message' => 'تم إيقاف البث من المتصفح. استخدم OBS.',
-        ], 410);
-    }
-
-    public function obs(Request $request, Lesson $lesson): JsonResponse
-    {
-        $user = $request->user();
-        if (! $user) {
-            return response()->json(['message' => 'غير مصرح.'], 401);
-        }
-
-        $teacher = Teacher::where('user_id', $user->id)->first();
-        if (! $teacher) {
-            return response()->json(['message' => 'المعلم غير موجود.'], 404);
-        }
-
-        $allowedSubject = Specialization::where('teacher_id', $teacher->id)
-            ->where('subject_id', $lesson->subject_id)
-            ->exists();
-
-        if (! $allowedSubject) {
-            return response()->json(['message' => 'غير مصرح بهذا الدرس.'], 403);
-        }
-
-        $rtmpServerUrl = config('services.srs.rtmp_publish_url', env('SRS_RTMP_PUBLISH_URL', 'rtmp://localhost/live'));
-        $streamKey = 'lesson-' . $lesson->id;
-        $fullIngestUrl = rtrim((string) $rtmpServerUrl, '/') . '/' . $streamKey;
-
-        return response()->json([
-            'lesson_id' => $lesson->id,
-            'rtmp_server_url' => $rtmpServerUrl,
-            'stream_key' => $streamKey,
-            'full_ingest_url' => $fullIngestUrl,
         ]);
     }
 }

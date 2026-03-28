@@ -33,7 +33,6 @@ use App\Http\Controllers\Student\SubjectController as StudentSubjectController;
 use App\Http\Controllers\Student\TimeTableController as StudentTimeTableController;
 use App\Http\Controllers\Teacher\AttendanceController;
 use App\Http\Controllers\Teacher\LessonController as TeacherLessonController;
-use App\Http\Controllers\Teacher\LiveStreamController;
 use App\Http\Controllers\Teacher\MarkController;
 use App\Http\Controllers\Teacher\MonthlyTestController;
 use App\Http\Controllers\Teacher\StudentController as TeacherStudentController;
@@ -79,8 +78,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('teacher')->group(function () {
         Route::get('profile', [TeacherProfileController::class, 'show']);
+        Route::post('lessons/{lesson}/start-live', [LessonLiveController::class, 'startLive']);
         Route::post('lessons/{lesson}/start-live-youtube', [LessonLiveController::class, 'startLive']);
-        Route::get('lessons/{lesson}/obs', [TeacherLessonController::class, 'obs']);
+        Route::post('lessons/{lesson}/end-live', [LessonLiveController::class, 'endLive']);
         Route::get('subjects', [TeacherSubjectController::class, 'index']);
         Route::get('subjects/{subject}', [TeacherSubjectController::class, 'show']);
         Route::get('students', [TeacherStudentController::class, 'index']);
@@ -89,7 +89,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('reports', [TeacherReportController::class, 'store']);
         Route::get('timetable', [TimeTableController::class, 'index']);
         Route::apiResource('lessons', TeacherLessonController::class);
-        Route::post('lessons/{lesson}/start-live', [LiveStreamController::class, 'start']);
         Route::get('lessons/{lesson}/insights', [TeacherLessonController::class, 'insights']);
         Route::get('attendance/summary', [AttendanceController::class, 'summary']);
         Route::apiResource('attendance', AttendanceController::class)->only(['index', 'store']);

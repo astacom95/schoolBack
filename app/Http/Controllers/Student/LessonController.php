@@ -32,7 +32,7 @@ class LessonController extends Controller
 
         $latestMedia = LessonMedia::query()
             ->select('lesson_id', DB::raw('MAX(id) as media_id'))
-            ->where('provider', 'youtube')
+            ->where('is_active', true)
             ->groupBy('lesson_id');
 
         $lessons = Lesson::query()
@@ -51,14 +51,15 @@ class LessonController extends Controller
                 'lessons.summary',
                 'subjects.name as subject_name',
                 'lessons.created_at',
-                'lm.yt_video_id',
+                'lm.source_url',
+                'lm.media_type',
                 'lm.status',
                 'lm.id as media_id'
             )
             ->orderByDesc('lessons.created_at')
             ->get()
             ->map(function ($lesson) {
-                $videoId = $lesson->yt_video_id;
+                $playbackUrl = $lesson->source_url;
                 return [
                     'id' => $lesson->id,
                     'title' => $lesson->title,
@@ -66,9 +67,12 @@ class LessonController extends Controller
                     'subject_id' => $lesson->subject_id,
                     'subject_name' => $lesson->subject_name,
                     'created_at' => optional($lesson->created_at)->toDateString(),
-                    'watch_url' => $videoId ? "https://www.youtube.com/watch?v={$videoId}" : null,
-                    'embed_url' => $videoId ? "https://www.youtube.com/embed/{$videoId}" : null,
+                    'watch_url' => $playbackUrl,
+                    'embed_url' => null,
+                    'video_url' => $playbackUrl,
+                    'playback_url' => $playbackUrl,
                     'is_live' => $lesson->status === 'live',
+                    'media_type' => $lesson->media_type,
                     'has_media' => (bool) $lesson->media_id,
                 ];
             });
@@ -94,11 +98,11 @@ class LessonController extends Controller
 
         $media = LessonMedia::query()
             ->where('lesson_id', $lesson->id)
-            ->where('provider', 'youtube')
+            ->where('is_active', true)
             ->latest('id')
             ->first();
 
-        $videoId = $media?->yt_video_id;
+        $playbackUrl = $media?->source_url;
         $subjectName = $lesson->subject_id ? Subject::where('id', $lesson->subject_id)->value('name') : null;
         $quiz = Quiz::where('lesson_id', $lesson->id)->first();
         $quizUrl = $quiz?->quiz_url;
@@ -114,9 +118,12 @@ class LessonController extends Controller
                 'subject_id' => $lesson->subject_id,
                 'subject_name' => $subjectName,
                 'created_at' => optional($lesson->created_at)->toDateString(),
-                'watch_url' => $videoId ? "https://www.youtube.com/watch?v={$videoId}" : null,
-                'embed_url' => $videoId ? "https://www.youtube.com/embed/{$videoId}" : null,
+                'watch_url' => $playbackUrl,
+                'embed_url' => null,
+                'video_url' => $playbackUrl,
+                'playback_url' => $playbackUrl,
                 'is_live' => $media?->status === 'live',
+                'media_type' => $media?->media_type,
                 'quiz_url' => $quiz?->quiz_url,
                 'quiz_url_display' => $quizUrl,
             ],

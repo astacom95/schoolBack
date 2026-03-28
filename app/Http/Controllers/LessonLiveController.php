@@ -4,161 +4,238 @@ namespace App\Http\Controllers;
 
 use App\Models\Lesson;
 use App\Models\LessonMedia;
-use App\Models\YoutubeAccount;
-use App\Services\YouTube\YouTubeLiveService;
-use Carbon\Carbon;
+use App\Models\Specialization;
+use App\Models\Teacher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Symfony\Component\Process\Process;
+use Illuminate\Support\Facades\Storage;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use FilesystemIterator;
 use Throwable;
 
 class LessonLiveController extends Controller
 {
     public function startLive(Request $request, Lesson $lesson)
     {
-        try {
-            // Authorize teacher permission here...
-            $account = YoutubeAccount::query()
-                ->where('is_active', true)
-                ->latest()
-                ->first();
+        $teacher = $this->authorizedTeacher($request, $lesson);
+        if (! $teacher) {
+            return response()->json(['message' => 'غير مصرح بهذا الدرس.'], 403);
+        }
 
-            if (! $account) {
-                return response()->json([
-                    'message' => 'لا يوجد حساب يوتيوب نشط. قم بربط قناة يوتيوب أولاً.',
-                ], 422);
+        $streamName = 'lesson-' . $lesson->id;
+        $whipUrl = $this->buildWhipUrl($streamName);
+        $playbackFlvUrl = $this->buildPlaybackFlvUrl($streamName);
+
+        $media = LessonMedia::query()
+            ->where('lesson_id', $lesson->id)
+            ->where('is_active', true)
+            ->latest('id')
+            ->first();
+
+        if (! $media) {
+            $media = new LessonMedia();
+            $media->lesson_id = $lesson->id;
+        }
+
+        $media->provider = 'external';
+        $media->media_type = 'live';
+        $media->status = 'live';
+        $media->webrtc_stream_name = $streamName;
+        $media->webrtc_ingest_url = $whipUrl;
+        $media->source_url = $playbackFlvUrl;
+        $media->started_at = now();
+        $media->ended_at = null;
+        $media->is_active = true;
+        $media->save();
+
+        $lesson->primary_media_id = $media->id;
+        $lesson->save();
+
+        return response()->json([
+            'lesson_id' => $lesson->id,
+            'media_id' => $media->id,
+            'whip_url' => $whipUrl,
+            'stream_name' => $streamName,
+            'playback_flv_url' => $playbackFlvUrl,
+        ]);
+    }
+
+    public function endLive(Request $request, Lesson $lesson)
+    {
+        $teacher = $this->authorizedTeacher($request, $lesson);
+        if (! $teacher) {
+            return response()->json(['message' => 'غير مصرح بهذا الدرس.'], 403);
+        }
+
+        $media = LessonMedia::query()
+            ->where('lesson_id', $lesson->id)
+            ->where('is_active', true)
+            ->where('media_type', 'live')
+            ->latest('id')
+            ->first();
+
+        if (! $media) {
+            return response()->json([
+                'message' => 'لا يوجد بث مباشر نشط لهذا الدرس.',
+            ], 422);
+        }
+
+        $media->status = 'ended';
+        $media->ended_at = now();
+        $media->save();
+
+        $streamName = $media->webrtc_stream_name ?: ('lesson-' . $lesson->id);
+        $recordingsPath = rtrim((string) config('services.srs.recordings_path'), '/');
+        $localFilePath = $this->resolveRecordingFilePath($recordingsPath, $streamName);
+
+        if (! $localFilePath || ! is_file($localFilePath)) {
+            $media->status = 'error';
+            $media->save();
+
+            return response()->json([
+                'message' => 'لم يتم العثور على ملف التسجيل المحلي.',
+                'recordings_path' => $recordingsPath,
+                'expected_stream_name' => $streamName,
+            ], 422);
+        }
+
+        try {
+            $prefix = trim((string) config('services.srs.wasabi_object_prefix', 'lessons'), '/');
+            $objectKey = "{$prefix}/{$lesson->id}/" . now()->format('Ymd_His') . '.mp4';
+
+            $stream = fopen($localFilePath, 'r');
+            if ($stream === false) {
+                throw new \RuntimeException('Unable to open local recording file.');
             }
 
-            $service = new YouTubeLiveService($account);
-            $scheduledStart = Carbon::now()->addMinutes(1);
-
-            $result = $service->createAndBindLive(
-                title: $lesson->title . ' (Live)',
-                description: $lesson->summary,
-                scheduledStart: $scheduledStart,
-                privacyStatus: 'unlisted',
-                enableDvr: true,
-                autoStart: true,
-                autoStop: true
-            );
-
-            $this->startYoutubeRestream($lesson->id, $result['rtmps_url'], $result['stream_key']);
-
-            // Create/Update lesson_media row
-            $media = LessonMedia::query()->create([
-                'lesson_id' => $lesson->id,
-                'provider' => 'youtube',
-                'media_type' => 'live',
-                'status' => 'scheduled',
-                'yt_broadcast_id' => $result['broadcast_id'],
-                'yt_stream_id' => $result['stream_id'],
-                'yt_video_id' => $result['video_id'],
-                'yt_rtmps_url' => $result['rtmps_url'],
-                // If you want to store stream key, do it encrypted, or omit:
-                // 'yt_stream_key_enc' => encrypt($result['stream_key']),
-                'yt_privacy_status' => 'unlisted',
-                'yt_scheduled_start_time' => $scheduledStart,
+            Storage::disk('s3')->put($objectKey, $stream, [
+                'visibility' => 'public',
+                'ContentType' => 'video/mp4',
             ]);
+            fclose($stream);
 
-            // Set as primary media (optional)
-            $lesson->primary_media_id = $media->id;
-            $lesson->save();
+            $publicBaseUrl = rtrim((string) config('services.srs.wasabi_public_base_url', ''), '/');
+            $publicUrl = $publicBaseUrl !== ''
+                ? $publicBaseUrl . '/' . ltrim($objectKey, '/')
+                : Storage::disk('s3')->url($objectKey);
 
-            // Return to teacher UI (show OBS details)
+            $media->provider = 'external';
+            $media->media_type = 'vod';
+            $media->status = 'ended';
+            $media->source_url = $publicUrl;
+            $media->save();
+
+            @unlink($localFilePath);
+
             return response()->json([
                 'lesson_id' => $lesson->id,
                 'media_id' => $media->id,
-                'youtube_video_id' => $result['video_id'],
-                'embed_url' => $result['embed_url'],
-                'rtmps_url' => $result['rtmps_url'],
-                'stream_key' => $result['stream_key'], // show once
+                'recording_url' => $publicUrl,
+                'local_file_path' => $localFilePath,
+                'uploaded' => true,
             ]);
         } catch (Throwable $e) {
-            Log::error('start-live-youtube failed', [
+            Log::error('end-live upload failed', [
                 'lesson_id' => $lesson->id,
                 'error' => $e->getMessage(),
             ]);
 
+            $media->status = 'error';
+            $media->save();
+
             return response()->json([
-                'message' => 'تعذر بدء البث على يوتيوب. تحقق من ربط الحساب وصلاحيات YouTube ثم أعد المحاولة.',
+                'message' => 'فشل رفع التسجيل إلى Wasabi. تم الاحتفاظ بالملف المحلي.',
+                'uploaded' => false,
             ], 500);
         }
     }
 
-    private function startYoutubeRestream(int $lessonId, string $rtmpsUrl, string $streamKey): void
+    private function authorizedTeacher(Request $request, Lesson $lesson): ?Teacher
     {
-        $rtmpBase = config('services.srs.rtmp_base_url', env('SRS_RTMP_BASE_URL', 'rtmp://localhost/live'));
-        $streamName = 'lesson-' . $lessonId;
-        $inputUrl = rtrim($rtmpBase, '/') . '/' . $streamName;
-
-        if (! str_contains($rtmpsUrl, '://')) {
-            $rtmpsUrl = 'rtmps://' . ltrim($rtmpsUrl, '/');
-        }
-        $outputUrl = rtrim($rtmpsUrl, '/') . '/' . $streamKey;
-
-        $ffmpegPath = config('services.srs.ffmpeg_path', env('FFMPEG_PATH', 'ffmpeg'));
-        $audioBitrate = (string) config('services.srs.restream_audio_bitrate', env('RESTREAM_AUDIO_BITRATE', '192k'));
-        if (! preg_match('/^\d+k$/i', $audioBitrate)) {
-            $audioBitrate = '192k';
+        $user = $request->user();
+        if (! $user) {
+            return null;
         }
 
-        $audioRate = (int) config('services.srs.restream_audio_rate', env('RESTREAM_AUDIO_RATE', 44100));
-        if ($audioRate <= 0) {
-            $audioRate = 44100;
+        $teacher = Teacher::query()->where('user_id', $user->id)->first();
+        if (! $teacher) {
+            return null;
         }
 
-        $audioChannels = (int) config('services.srs.restream_audio_channels', env('RESTREAM_AUDIO_CHANNELS', 1));
-        if (! in_array($audioChannels, [1, 2], true)) {
-            $audioChannels = 1;
+        $allowedSubject = Specialization::query()
+            ->where('teacher_id', $teacher->id)
+            ->where('subject_id', $lesson->subject_id)
+            ->exists();
+
+        return $allowedSubject ? $teacher : null;
+    }
+
+    private function buildWhipUrl(string $streamName): string
+    {
+        $base = rtrim((string) config('services.srs.whip_base_url'), '/');
+        $app = (string) config('services.srs.whip_app', 'live');
+        $endpoint = "{$base}/";
+        $separator = str_contains($endpoint, '?') ? '&' : '?';
+
+        return "{$endpoint}{$separator}app={$app}&stream={$streamName}";
+    }
+
+    private function buildPlaybackFlvUrl(string $streamName): string
+    {
+        $base = rtrim((string) config('services.srs.playback_flv_base_url'), '/');
+
+        return "{$base}/{$streamName}.flv";
+    }
+
+    private function resolveRecordingFilePath(string $recordingsPath, string $streamName): ?string
+    {
+        if ($recordingsPath === '' || ! is_dir($recordingsPath)) {
+            return null;
         }
 
-        $audioFilterBase = trim((string) config('services.srs.restream_audio_filter_base', env('RESTREAM_AUDIO_FILTER_BASE', 'highpass=f=150,lowpass=f=5000,afftdn=nr=12:nt=w')));
-        if ($audioFilterBase === '') {
-            $audioFilterBase = 'highpass=f=150,lowpass=f=5000,afftdn=nr=12:nt=w';
+        $exact = $recordingsPath . '/' . $streamName . '.mp4';
+        if (is_file($exact)) {
+            return $exact;
         }
 
-        $enableRnnoise = filter_var(
-            config('services.srs.restream_audio_enable_rnnoise', env('RESTREAM_AUDIO_ENABLE_RNNOISE', false)),
-            FILTER_VALIDATE_BOOLEAN
-        );
-        $rnnoiseModelPath = trim((string) config('services.srs.restream_rnnoise_model_path', env('RESTREAM_RNNOISE_MODEL_PATH', '/usr/local/share/rnnoise/cb.rnnn')));
-        $audioFilter = $audioFilterBase;
-        if ($enableRnnoise && $rnnoiseModelPath !== '' && is_file($rnnoiseModelPath)) {
-            $audioFilter .= ',arnndn=m=' . $rnnoiseModelPath;
+        $matches = [];
+
+        foreach (glob($recordingsPath . '/' . $streamName . '*.mp4') ?: [] as $filePath) {
+            if (is_file($filePath)) {
+                $matches[] = $filePath;
+            }
         }
 
-        $ffmpegCmd = sprintf(
-            '%s -re -i %s -c:v copy -c:a aac -b:a %s -ar %d -ac %d -af %s -f flv %s',
-            escapeshellcmd($ffmpegPath),
-            escapeshellarg($inputUrl),
-            escapeshellarg($audioBitrate),
-            $audioRate,
-            $audioChannels,
-            escapeshellarg($audioFilter),
-            escapeshellarg($outputUrl)
-        );
-
-        $logFile = storage_path('logs/ffmpeg-restream.log');
-        $sanitizedOutputUrl = rtrim($rtmpsUrl, '/') . '/[REDACTED_STREAM_KEY]';
-        $sanitizedFfmpegCmd = str_replace(
-            escapeshellarg($outputUrl),
-            escapeshellarg($sanitizedOutputUrl),
-            $ffmpegCmd
-        );
-        file_put_contents(
-            $logFile,
-            sprintf("[%s] Starting restream command: %s\n", now()->toIso8601String(), $sanitizedFfmpegCmd),
-            FILE_APPEND
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($recordingsPath, FilesystemIterator::SKIP_DOTS)
         );
 
-        $command = sprintf(
-            'for i in {1..30}; do %s >> %s 2>&1 && exit 0; sleep 2; done; exit 1',
-            $ffmpegCmd,
-            escapeshellarg($logFile)
-        );
+        foreach ($iterator as $fileInfo) {
+            if (! $fileInfo->isFile()) {
+                continue;
+            }
 
-        $process = Process::fromShellCommandline($command);
-        $process->setTimeout(null);
-        $process->start();
+            $filename = $fileInfo->getFilename();
+            if (! str_ends_with(strtolower($filename), '.mp4')) {
+                continue;
+            }
+
+            if (! str_starts_with($filename, $streamName)) {
+                continue;
+            }
+
+            $matches[] = $fileInfo->getPathname();
+        }
+
+        if (empty($matches)) {
+            return null;
+        }
+
+        usort($matches, static function (string $a, string $b): int {
+            return filemtime($b) <=> filemtime($a);
+        });
+
+        return $matches[0] ?? null;
     }
 }
