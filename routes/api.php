@@ -81,6 +81,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('lessons/{lesson}/start-live', [LessonLiveController::class, 'startLive']);
         Route::post('lessons/{lesson}/start-live-youtube', [LessonLiveController::class, 'startLive']);
         Route::post('lessons/{lesson}/end-live', [LessonLiveController::class, 'endLive']);
+        Route::post('lessons/{lesson}/retry-upload-recording', [LessonLiveController::class, 'retryUploadRecording']);
         Route::get('subjects', [TeacherSubjectController::class, 'index']);
         Route::get('subjects/{subject}', [TeacherSubjectController::class, 'show']);
         Route::get('students', [TeacherStudentController::class, 'index']);

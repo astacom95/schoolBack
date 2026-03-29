@@ -206,7 +206,11 @@ class LessonController extends Controller
                 $join->on('lesson_media.lesson_id', '=', 'lessons.id')
                     ->where('lesson_media.is_active', true)
                     ->where(function ($query) {
-                        $query->whereIn('lesson_media.media_type', ['vod', 'uploaded'])
+                        $query->where(function ($vod) {
+                            $vod->whereIn('lesson_media.media_type', ['vod', 'uploaded'])
+                                ->where('lesson_media.status', 'ended')
+                                ->whereNotNull('lesson_media.source_url');
+                        })
                             ->orWhere(function ($live) {
                                 $live->where('lesson_media.media_type', 'live')
                                     ->where('lesson_media.status', 'live');
@@ -295,7 +299,11 @@ class LessonController extends Controller
                 ->where('lesson_id', $lesson->id)
                 ->where('is_active', true)
                 ->where(function ($query) {
-                    $query->whereIn('media_type', ['vod', 'uploaded'])
+                    $query->where(function ($vod) {
+                        $vod->whereIn('media_type', ['vod', 'uploaded'])
+                            ->where('status', 'ended')
+                            ->whereNotNull('source_url');
+                    })
                         ->orWhere(function ($live) {
                             $live->where('media_type', 'live')
                                 ->where('status', 'live');
@@ -309,7 +317,11 @@ class LessonController extends Controller
                 ->where('lesson_id', $lesson->id)
                 ->where('is_active', true)
                 ->where(function ($query) {
-                    $query->whereIn('media_type', ['vod', 'uploaded'])
+                    $query->where(function ($vod) {
+                        $vod->whereIn('media_type', ['vod', 'uploaded'])
+                            ->where('status', 'ended')
+                            ->whereNotNull('source_url');
+                    })
                         ->orWhere(function ($live) {
                             $live->where('media_type', 'live')
                                 ->where('status', 'live');

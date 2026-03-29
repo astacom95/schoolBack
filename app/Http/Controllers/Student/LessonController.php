@@ -34,7 +34,11 @@ class LessonController extends Controller
             ->select('lesson_id', DB::raw('MAX(id) as media_id'))
             ->where('is_active', true)
             ->where(function ($query) {
-                $query->whereIn('media_type', ['vod', 'uploaded'])
+                $query->where(function ($vod) {
+                    $vod->whereIn('media_type', ['vod', 'uploaded'])
+                        ->where('status', 'ended')
+                        ->whereNotNull('source_url');
+                })
                     ->orWhere(function ($live) {
                         $live->where('media_type', 'live')
                             ->where('status', 'live');
@@ -107,7 +111,11 @@ class LessonController extends Controller
             ->where('lesson_id', $lesson->id)
             ->where('is_active', true)
             ->where(function ($query) {
-                $query->whereIn('media_type', ['vod', 'uploaded'])
+                $query->where(function ($vod) {
+                    $vod->whereIn('media_type', ['vod', 'uploaded'])
+                        ->where('status', 'ended')
+                        ->whereNotNull('source_url');
+                })
                     ->orWhere(function ($live) {
                         $live->where('media_type', 'live')
                             ->where('status', 'live');

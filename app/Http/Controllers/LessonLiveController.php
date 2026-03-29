@@ -72,12 +72,14 @@ class LessonLiveController extends Controller
             ->where('lesson_id', $lesson->id)
             ->where('is_active', true)
             ->where('media_type', 'live')
+            ->where('status', 'live')
             ->latest('id')
             ->first();
 
         if (! $media) {
             return response()->json([
                 'message' => 'لا يوجد بث مباشر نشط لهذا الدرس.',
+                'code' => 'live_not_found',
             ], 422);
         }
 
@@ -95,11 +97,59 @@ class LessonLiveController extends Controller
 
             return response()->json([
                 'message' => 'لم يتم العثور على ملف التسجيل المحلي.',
+                'code' => 'recording_not_found',
+                'lesson_id' => $lesson->id,
                 'recordings_path' => $recordingsPath,
                 'expected_stream_name' => $streamName,
             ], 422);
         }
 
+        return $this->uploadRecordingToWasabi($lesson, $media, $localFilePath);
+    }
+
+    public function retryUploadRecording(Request $request, Lesson $lesson)
+    {
+        $teacher = $this->authorizedTeacher($request, $lesson);
+        if (! $teacher) {
+            return response()->json(['message' => 'غير مصرح بهذا الدرس.'], 403);
+        }
+
+        $media = LessonMedia::query()
+            ->where('lesson_id', $lesson->id)
+            ->where('is_active', true)
+            ->where('media_type', 'live')
+            ->latest('id')
+            ->first();
+
+        if (! $media) {
+            return response()->json([
+                'message' => 'لا يوجد تسجيل قابل لإعادة الرفع لهذا الدرس.',
+                'code' => 'live_not_found',
+            ], 422);
+        }
+
+        $streamName = $media->webrtc_stream_name ?: ('lesson-' . $lesson->id);
+        $recordingsPath = rtrim((string) config('services.srs.recordings_path'), '/');
+        $localFilePath = $this->resolveRecordingFilePath($recordingsPath, $streamName);
+
+        if (! $localFilePath || ! is_file($localFilePath)) {
+            $media->status = 'error';
+            $media->save();
+
+            return response()->json([
+                'message' => 'لم يتم العثور على ملف التسجيل المحلي.',
+                'code' => 'recording_not_found',
+                'lesson_id' => $lesson->id,
+                'recordings_path' => $recordingsPath,
+                'expected_stream_name' => $streamName,
+            ], 422);
+        }
+
+        return $this->uploadRecordingToWasabi($lesson, $media, $localFilePath);
+    }
+
+    private function uploadRecordingToWasabi(Lesson $lesson, LessonMedia $media, string $localFilePath)
+    {
         try {
             $prefix = trim((string) config('services.srs.wasabi_object_prefix', 'lessons'), '/');
             $objectKey = "{$prefix}/{$lesson->id}/" . now()->format('Ymd_His') . '.mp4';
@@ -206,7 +256,7 @@ class LessonLiveController extends Controller
         $matches = [];
 
         foreach (glob($recordingsPath . '/' . $streamName . '*.mp4') ?: [] as $filePath) {
-            if (is_file($filePath)) {
+            if (is_file($filePath) && $this->isMatchingRecordingFile($filePath, $streamName)) {
                 $matches[] = $filePath;
             }
         }
@@ -225,7 +275,7 @@ class LessonLiveController extends Controller
                 continue;
             }
 
-            if (! str_starts_with($filename, $streamName)) {
+            if (! $this->isMatchingRecordingFile($filename, $streamName)) {
                 continue;
             }
 
@@ -241,6 +291,15 @@ class LessonLiveController extends Controller
         });
 
         return $matches[0] ?? null;
+    }
+
+    private function isMatchingRecordingFile(string $filePathOrName, string $streamName): bool
+    {
+        $filename = basename($filePathOrName);
+        $escaped = preg_quote($streamName, '/');
+
+        return (bool) preg_match("/^{$escaped}(?:\\.|\\.\\d+\\.)[^\\/]*\\.mp4$/i", $filename)
+            || strcasecmp($filename, $streamName . '.mp4') === 0;
     }
 
     private function waitForRecordingFilePath(string $recordingsPath, string $streamName): ?string
