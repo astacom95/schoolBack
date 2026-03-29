@@ -18,6 +18,7 @@ return [
         'whip_app' => env('SRS_WHIP_APP', 'live'),
         'playback_flv_base_url' => env('SRS_PLAYBACK_FLV_BASE_URL', 'http://localhost:8080/live'),
         'recordings_path' => env('SRS_RECORDINGS_PATH', storage_path('app/srs-recordings')),
+        'recording_finalize_wait_seconds' => env('SRS_RECORDING_FINALIZE_WAIT_SECONDS', 12),
         'wasabi_public_base_url' => env('WASABI_PUBLIC_BASE_URL', ''),
         'wasabi_object_prefix' => env('WASABI_OBJECT_PREFIX', 'lessons'),
     ],

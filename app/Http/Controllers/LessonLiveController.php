@@ -87,7 +87,7 @@ class LessonLiveController extends Controller
 
         $streamName = $media->webrtc_stream_name ?: ('lesson-' . $lesson->id);
         $recordingsPath = rtrim((string) config('services.srs.recordings_path'), '/');
-        $localFilePath = $this->resolveRecordingFilePath($recordingsPath, $streamName);
+        $localFilePath = $this->waitForRecordingFilePath($recordingsPath, $streamName);
 
         if (! $localFilePath || ! is_file($localFilePath)) {
             $media->status = 'error';
@@ -241,5 +241,27 @@ class LessonLiveController extends Controller
         });
 
         return $matches[0] ?? null;
+    }
+
+    private function waitForRecordingFilePath(string $recordingsPath, string $streamName): ?string
+    {
+        $waitSeconds = max(0, (int) config('services.srs.recording_finalize_wait_seconds', 12));
+
+        $startedAt = time();
+        do {
+            clearstatcache();
+            $filePath = $this->resolveRecordingFilePath($recordingsPath, $streamName);
+            if ($filePath && is_file($filePath)) {
+                return $filePath;
+            }
+
+            if (time() - $startedAt >= $waitSeconds) {
+                break;
+            }
+
+            sleep(1);
+        } while (true);
+
+        return null;
     }
 }
