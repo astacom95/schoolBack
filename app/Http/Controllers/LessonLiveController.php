@@ -109,11 +109,14 @@ class LessonLiveController extends Controller
                 throw new \RuntimeException('Unable to open local recording file.');
             }
 
-            Storage::disk('s3')->put($objectKey, $stream, [
-                'visibility' => 'public',
-                'ContentType' => 'video/mp4',
-            ]);
-            fclose($stream);
+            try {
+                // Do not force ACL/visibility here; some S3-compatible setups reject object ACLs.
+                Storage::disk('s3')->put($objectKey, $stream, [
+                    'ContentType' => 'video/mp4',
+                ]);
+            } finally {
+                fclose($stream);
+            }
 
             $publicBaseUrl = rtrim((string) config('services.srs.wasabi_public_base_url', ''), '/');
             $publicUrl = $publicBaseUrl !== ''
@@ -138,6 +141,7 @@ class LessonLiveController extends Controller
         } catch (Throwable $e) {
             Log::error('end-live upload failed', [
                 'lesson_id' => $lesson->id,
+                'local_file_path' => $localFilePath,
                 'error' => $e->getMessage(),
             ]);
 
