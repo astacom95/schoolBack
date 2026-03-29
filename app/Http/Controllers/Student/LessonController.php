@@ -33,6 +33,13 @@ class LessonController extends Controller
         $latestMedia = LessonMedia::query()
             ->select('lesson_id', DB::raw('MAX(id) as media_id'))
             ->where('is_active', true)
+            ->where(function ($query) {
+                $query->whereIn('media_type', ['vod', 'uploaded'])
+                    ->orWhere(function ($live) {
+                        $live->where('media_type', 'live')
+                            ->where('status', 'live');
+                    });
+            })
             ->groupBy('lesson_id');
 
         $lessons = Lesson::query()
@@ -99,6 +106,13 @@ class LessonController extends Controller
         $media = LessonMedia::query()
             ->where('lesson_id', $lesson->id)
             ->where('is_active', true)
+            ->where(function ($query) {
+                $query->whereIn('media_type', ['vod', 'uploaded'])
+                    ->orWhere(function ($live) {
+                        $live->where('media_type', 'live')
+                            ->where('status', 'live');
+                    });
+            })
             ->latest('id')
             ->first();
 

@@ -159,7 +159,9 @@ class LessonController extends Controller
                 ->join('lesson_media', function ($join) {
                     $join->on('lesson_media.lesson_id', '=', 'lessons.id')
                         ->where('lesson_media.is_active', true)
-                        ->whereIn('lesson_media.media_type', ['vod', 'uploaded']);
+                        ->whereIn('lesson_media.media_type', ['vod', 'uploaded'])
+                        ->where('lesson_media.status', 'ended')
+                        ->whereNotNull('lesson_media.source_url');
                 })
                 ->select(
                     'lessons.id',
@@ -202,7 +204,14 @@ class LessonController extends Controller
             ->leftJoin('subjects', 'subjects.id', '=', 'lessons.subject_id')
             ->leftJoin('lesson_media', function ($join) {
                 $join->on('lesson_media.lesson_id', '=', 'lessons.id')
-                    ->where('lesson_media.is_active', true);
+                    ->where('lesson_media.is_active', true)
+                    ->where(function ($query) {
+                        $query->whereIn('lesson_media.media_type', ['vod', 'uploaded'])
+                            ->orWhere(function ($live) {
+                                $live->where('lesson_media.media_type', 'live')
+                                    ->where('lesson_media.status', 'live');
+                            });
+                    });
             })
             ->select(
                 'lessons.id',
@@ -285,6 +294,13 @@ class LessonController extends Controller
                 ->where('id', $lesson->primary_media_id)
                 ->where('lesson_id', $lesson->id)
                 ->where('is_active', true)
+                ->where(function ($query) {
+                    $query->whereIn('media_type', ['vod', 'uploaded'])
+                        ->orWhere(function ($live) {
+                            $live->where('media_type', 'live')
+                                ->where('status', 'live');
+                        });
+                })
                 ->first();
         }
 
@@ -292,6 +308,13 @@ class LessonController extends Controller
             $media = LessonMedia::query()
                 ->where('lesson_id', $lesson->id)
                 ->where('is_active', true)
+                ->where(function ($query) {
+                    $query->whereIn('media_type', ['vod', 'uploaded'])
+                        ->orWhere(function ($live) {
+                            $live->where('media_type', 'live')
+                                ->where('status', 'live');
+                        });
+                })
                 ->latest('id')
                 ->first();
         }
