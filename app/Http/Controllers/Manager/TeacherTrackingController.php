@@ -15,11 +15,9 @@ class TeacherTrackingController extends Controller
     public function index(): JsonResponse
     {
         $subjectRecorded = Lesson::query()
-            ->leftJoin('lesson_media', function ($join) {
-                $join->on('lesson_media.lesson_id', '=', 'lessons.id')
-                    ->where('lesson_media.is_active', true);
-            })
-            ->select('lessons.subject_id', DB::raw('COUNT(DISTINCT lesson_media.lesson_id) as recorded_count'))
+            ->whereNotNull('lessons.meet_link')
+            ->where('lessons.meet_link', '!=', '')
+            ->select('lessons.subject_id', DB::raw('COUNT(*) as recorded_count'))
             ->groupBy('lessons.subject_id')
             ->pluck('recorded_count', 'lessons.subject_id');
 

@@ -41,7 +41,6 @@ use App\Http\Controllers\Teacher\ReportController as TeacherReportController;
 use App\Http\Controllers\Teacher\PapersWorkController as TeacherPapersWorkController;
 use App\Http\Controllers\Teacher\TimeTableController;
 use App\Http\Controllers\Teacher\ProfileController as TeacherProfileController;
-use App\Http\Controllers\Streaming\CloudflareWebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/manager/students/public', [StudentController::class, 'index'])->withoutMiddleware('auth:sanctum');
@@ -79,9 +78,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('teacher')->group(function () {
         Route::get('profile', [TeacherProfileController::class, 'show']);
         Route::post('lessons/{lesson}/start-live', [LessonLiveController::class, 'startLive']);
-        Route::post('lessons/{lesson}/start-live-youtube', [LessonLiveController::class, 'startLive']);
-        Route::post('lessons/{lesson}/end-live', [LessonLiveController::class, 'endLive']);
-        Route::post('lessons/{lesson}/retry-upload-recording', [LessonLiveController::class, 'retryUploadRecording']);
         Route::get('subjects', [TeacherSubjectController::class, 'index']);
         Route::get('subjects/{subject}', [TeacherSubjectController::class, 'show']);
         Route::get('students', [TeacherStudentController::class, 'index']);
@@ -117,5 +113,3 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::post('/auth/login', [LoginController::class, 'login']);
 Route::post('/auth/logout', [LoginController::class, 'logout'])->middleware('auth:sanctum');
-
-Route::post('/cloudflare/webhook', [CloudflareWebhookController::class, 'handle']);

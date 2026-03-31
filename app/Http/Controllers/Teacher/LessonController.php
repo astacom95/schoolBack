@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Teacher;
 
 use App\Http\Controllers\Controller;
 use App\Models\Lesson;
-use App\Models\LessonMedia;
 use App\Models\Quiz;
 use App\Models\Specialization;
 use App\Models\Subject;
@@ -125,13 +124,7 @@ class LessonController extends Controller
         if ($subjectIds->isEmpty()) {
             return response()->json([
                 'data' => [],
-                'teacher' => [
-                    'name' => $teacher->full_name,
-                    'email' => $teacher->user?->email,
-                    'phone_number' => $teacher->user?->phone_number,
-                    'personal_image_url' => $teacherImage,
-                    'specializations' => $specializations,
-                ],
+                'teacher' => $this->teacherPayload($teacher, $teacherImage, $specializations),
             ]);
         }
 
@@ -141,37 +134,23 @@ class LessonController extends Controller
         if ($subjectId > 0 && ! $subjectIds->contains($subjectId)) {
             return response()->json([
                 'data' => [],
-                'teacher' => [
-                    'name' => $teacher->full_name,
-                    'email' => $teacher->user?->email,
-                    'phone_number' => $teacher->user?->phone_number,
-                    'personal_image_url' => $teacherImage,
-                    'specializations' => $specializations,
-                ],
+                'teacher' => $this->teacherPayload($teacher, $teacherImage, $specializations),
             ]);
         }
 
         if ($recordedOnly) {
             $recordedLessons = Lesson::query()
                 ->whereIn('lessons.subject_id', $subjectIds)
+                ->whereNotNull('lessons.meet_link')
+                ->where('lessons.meet_link', '!=', '')
                 ->when($subjectId > 0, fn ($query) => $query->where('lessons.subject_id', $subjectId))
                 ->join('subjects', 'subjects.id', '=', 'lessons.subject_id')
-                ->join('lesson_media', function ($join) {
-                    $join->on('lesson_media.lesson_id', '=', 'lessons.id')
-                        ->where('lesson_media.is_active', true)
-                        ->whereIn('lesson_media.media_type', ['vod', 'uploaded'])
-                        ->where('lesson_media.status', 'ended')
-                        ->whereNotNull('lesson_media.source_url');
-                })
                 ->select(
                     'lessons.id',
                     'lessons.title',
                     'subjects.name as subject_name',
-                    'lessons.created_at',
-                    'lesson_media.thumbnail_url',
-                    'lesson_media.source_url',
-                    'lesson_media.cf_vod_playback_id',
-                    'lesson_media.media_type'
+                    'lessons.meet_link',
+                    'lessons.created_at'
                 )
                 ->orderByDesc('lessons.created_at')
                 ->get()
@@ -180,21 +159,15 @@ class LessonController extends Controller
                         'id' => $lesson->id,
                         'title' => $lesson->title,
                         'subject_name' => $lesson->subject_name,
-                        'thumbnail_url' => $lesson->thumbnail_url ?? null,
-                        'media_type' => $lesson->media_type ?? null,
+                        'meet_link' => $lesson->meet_link,
+                        'has_media' => true,
                         'created_at' => optional($lesson->created_at)->toDateString(),
                     ];
                 });
 
             return response()->json([
                 'data' => $recordedLessons,
-                'teacher' => [
-                    'name' => $teacher->full_name,
-                    'email' => $teacher->user?->email,
-                    'phone_number' => $teacher->user?->phone_number,
-                    'personal_image_url' => $teacherImage,
-                    'specializations' => $specializations,
-                ],
+                'teacher' => $this->teacherPayload($teacher, $teacherImage, $specializations),
             ]);
         }
 
@@ -202,53 +175,31 @@ class LessonController extends Controller
             ->whereIn('lessons.subject_id', $subjectIds)
             ->when($subjectId > 0, fn ($query) => $query->where('lessons.subject_id', $subjectId))
             ->leftJoin('subjects', 'subjects.id', '=', 'lessons.subject_id')
-            ->leftJoin('lesson_media', function ($join) {
-                $join->on('lesson_media.lesson_id', '=', 'lessons.id')
-                    ->where('lesson_media.is_active', true)
-                    ->where(function ($query) {
-                        $query->where(function ($vod) {
-                            $vod->whereIn('lesson_media.media_type', ['vod', 'uploaded'])
-                                ->where('lesson_media.status', 'ended')
-                                ->whereNotNull('lesson_media.source_url');
-                        })
-                            ->orWhere(function ($live) {
-                                $live->where('lesson_media.media_type', 'live')
-                                    ->where('lesson_media.status', 'live');
-                            });
-                    });
-            })
             ->select(
                 'lessons.id',
                 'lessons.title',
                 'lessons.subject_id',
                 'subjects.name as subject_name',
+                'lessons.meet_link',
                 'lessons.created_at'
             )
-            ->selectRaw('MAX(lesson_media.id) as media_id')
-            ->selectRaw('COUNT(lesson_media.id) > 0 as has_media')
-            ->groupBy('lessons.id', 'lessons.title', 'lessons.subject_id', 'subjects.name', 'lessons.created_at')
             ->orderByDesc('lessons.created_at')
             ->get()
             ->map(function ($lesson) {
+                $hasMedia = ! empty($lesson->meet_link);
                 return [
                     'id' => $lesson->id,
                     'title' => $lesson->title,
                     'subject_name' => $lesson->subject_name,
-                    'media_id' => $lesson->media_id ? (int) $lesson->media_id : null,
-                    'has_media' => (bool) $lesson->has_media,
+                    'meet_link' => $lesson->meet_link,
+                    'has_media' => $hasMedia,
                     'created_at' => optional($lesson->created_at)->toDateString(),
                 ];
             });
 
         return response()->json([
             'data' => $lessons,
-            'teacher' => [
-                'name' => $teacher->full_name,
-                'email' => $teacher->user?->email,
-                'phone_number' => $teacher->user?->phone_number,
-                'personal_image_url' => $teacherImage,
-                'specializations' => $specializations,
-            ],
+            'teacher' => $this->teacherPayload($teacher, $teacherImage, $specializations),
         ]);
     }
 
@@ -284,7 +235,7 @@ class LessonController extends Controller
                 'lessons.subject_id',
                 'lessons.level_id',
                 'lessons.class_id',
-                'lessons.primary_media_id',
+                'lessons.meet_link',
                 'lessons.created_at',
                 'subjects.name as subject_name',
                 'levels.name as level_name',
@@ -292,46 +243,7 @@ class LessonController extends Controller
             )
             ->first();
 
-        $media = null;
-        if ($lesson->primary_media_id) {
-            $media = LessonMedia::query()
-                ->where('id', $lesson->primary_media_id)
-                ->where('lesson_id', $lesson->id)
-                ->where('is_active', true)
-                ->where(function ($query) {
-                    $query->where(function ($vod) {
-                        $vod->whereIn('media_type', ['vod', 'uploaded'])
-                            ->where('status', 'ended')
-                            ->whereNotNull('source_url');
-                    })
-                        ->orWhere(function ($live) {
-                            $live->where('media_type', 'live')
-                                ->where('status', 'live');
-                        });
-                })
-                ->first();
-        }
-
-        if (! $media) {
-            $media = LessonMedia::query()
-                ->where('lesson_id', $lesson->id)
-                ->where('is_active', true)
-                ->where(function ($query) {
-                    $query->where(function ($vod) {
-                        $vod->whereIn('media_type', ['vod', 'uploaded'])
-                            ->where('status', 'ended')
-                            ->whereNotNull('source_url');
-                    })
-                        ->orWhere(function ($live) {
-                            $live->where('media_type', 'live')
-                                ->where('status', 'live');
-                        });
-                })
-                ->latest('id')
-                ->first();
-        }
-
-        $playbackUrl = $media?->source_url;
+        $meetLink = $lessonDetails?->meet_link;
 
         return response()->json([
             'data' => [
@@ -345,21 +257,25 @@ class LessonController extends Controller
                 'class_id' => $lessonDetails?->class_id ?? $lesson->class_id,
                 'class_name' => $lessonDetails?->class_name,
                 'created_at' => optional($lessonDetails?->created_at ?? $lesson->created_at)->toDateString(),
-                'watch_url' => $playbackUrl,
+                'meet_link' => $meetLink,
+                'watch_url' => $meetLink,
                 'embed_url' => null,
-                'video_url' => $playbackUrl,
-                'playback_url' => $playbackUrl,
-                'media' => $media ? [
-                    'id' => $media->id,
-                    'provider' => $media->provider,
-                    'media_type' => $media->media_type,
-                    'status' => $media->status ?? null,
-                    'thumbnail_url' => $media->thumbnail_url,
-                    'duration_seconds' => $media->duration_seconds,
-                    'source_url' => $media->source_url,
-                    'cf_vod_playback_id' => $media->cf_vod_playback_id,
-                ] : null,
+                'video_url' => null,
+                'playback_url' => null,
+                'has_media' => ! empty($meetLink),
+                'is_recorded' => ! empty($meetLink),
             ],
         ]);
+    }
+
+    private function teacherPayload(Teacher $teacher, ?string $teacherImage, $specializations): array
+    {
+        return [
+            'name' => $teacher->full_name,
+            'email' => $teacher->user?->email,
+            'phone_number' => $teacher->user?->phone_number,
+            'personal_image_url' => $teacherImage,
+            'specializations' => $specializations,
+        ];
     }
 }

@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Lesson;
-use App\Models\LessonMedia;
 use App\Models\Level;
 use App\Models\SchoolClass;
 use App\Models\Specialization;
@@ -11,7 +10,6 @@ use App\Models\Subject;
 use App\Models\Teacher;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -19,185 +17,56 @@ class TeacherLessonLiveFlowTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_start_live_creates_or_updates_live_media_for_srs(): void
+    public function test_start_live_saves_google_meet_link_for_authorized_teacher(): void
     {
         [$user, $lesson] = $this->createAuthorizedTeacherAndLesson();
 
         Sanctum::actingAs($user);
 
-        $response = $this->postJson("/api/teacher/lessons/{$lesson->id}/start-live");
+        $meetLink = 'https://meet.google.com/ayc-obyo-ojq';
+        $response = $this->postJson("/api/teacher/lessons/{$lesson->id}/start-live", [
+            'meet_link' => $meetLink,
+        ]);
 
         $response->assertOk()
-            ->assertJsonStructure([
-                'lesson_id',
-                'media_id',
-                'whip_url',
-                'stream_name',
-                'playback_flv_url',
-            ]);
-
-        $this->assertDatabaseHas('lesson_media', [
-            'lesson_id' => $lesson->id,
-            'provider' => 'external',
-            'media_type' => 'live',
-            'status' => 'live',
-            'webrtc_stream_name' => 'lesson-' . $lesson->id,
-            'is_active' => 1,
-        ]);
-    }
-
-    public function test_end_live_uploads_recording_to_s3_and_marks_media_vod(): void
-    {
-        Storage::fake('s3');
-
-        [$user, $lesson] = $this->createAuthorizedTeacherAndLesson();
-
-        $media = LessonMedia::query()->create([
-            'lesson_id' => $lesson->id,
-            'provider' => 'external',
-            'media_type' => 'live',
-            'status' => 'live',
-            'is_active' => true,
-            'webrtc_stream_name' => 'lesson-' . $lesson->id,
-            'source_url' => 'http://localhost:8080/live/lesson-' . $lesson->id . '.flv',
-        ]);
-
-        $recordingsPath = sys_get_temp_dir() . '/srs-recordings-' . uniqid('', true);
-        @mkdir($recordingsPath, 0777, true);
-
-        $recordingPath = $recordingsPath . '/lesson-' . $lesson->id . '.mp4';
-        file_put_contents($recordingPath, 'fake-video');
-
-        config()->set('services.srs.recordings_path', $recordingsPath);
-        config()->set('services.srs.wasabi_object_prefix', 'lessons');
-        config()->set('services.srs.wasabi_public_base_url', 'https://cdn.example.com');
-
-        Sanctum::actingAs($user);
-
-        $response = $this->postJson("/api/teacher/lessons/{$lesson->id}/end-live");
-
-        $response->assertOk()->assertJsonPath('uploaded', true);
-
-        $media->refresh();
-        $this->assertSame('vod', $media->media_type);
-        $this->assertSame('ended', $media->status);
-        $this->assertStringStartsWith('https://cdn.example.com/lessons/' . $lesson->id . '/', (string) $media->source_url);
-        $this->assertFileDoesNotExist($recordingPath);
-    }
-
-    public function test_end_live_returns_recording_not_found_with_structured_payload(): void
-    {
-        [$user, $lesson] = $this->createAuthorizedTeacherAndLesson();
-
-        LessonMedia::query()->create([
-            'lesson_id' => $lesson->id,
-            'provider' => 'external',
-            'media_type' => 'live',
-            'status' => 'live',
-            'is_active' => true,
-            'webrtc_stream_name' => 'lesson-' . $lesson->id,
-            'source_url' => 'http://localhost:8080/live/lesson-' . $lesson->id . '.flv',
-        ]);
-
-        $recordingsPath = sys_get_temp_dir() . '/srs-recordings-' . uniqid('', true);
-        @mkdir($recordingsPath, 0777, true);
-        config()->set('services.srs.recordings_path', $recordingsPath);
-        config()->set('services.srs.recording_finalize_wait_seconds', 0);
-
-        Sanctum::actingAs($user);
-
-        $response = $this->postJson("/api/teacher/lessons/{$lesson->id}/end-live");
-
-        $response->assertStatus(422)
-            ->assertJsonPath('code', 'recording_not_found')
             ->assertJsonPath('lesson_id', $lesson->id)
-            ->assertJsonPath('expected_stream_name', 'lesson-' . $lesson->id);
+            ->assertJsonPath('meet_link', $meetLink)
+            ->assertJsonPath('has_media', true)
+            ->assertJsonPath('is_recorded', true);
 
-        $this->assertDatabaseHas('lesson_media', [
-            'lesson_id' => $lesson->id,
-            'media_type' => 'live',
-            'status' => 'error',
+        $this->assertDatabaseHas('lessons', [
+            'id' => $lesson->id,
+            'meet_link' => $meetLink,
         ]);
     }
 
-    public function test_retry_upload_recording_uploads_matching_file_and_converts_media_to_vod(): void
+    public function test_start_live_rejects_invalid_google_meet_link(): void
     {
-        Storage::fake('s3');
-
         [$user, $lesson] = $this->createAuthorizedTeacherAndLesson();
-
-        $media = LessonMedia::query()->create([
-            'lesson_id' => $lesson->id,
-            'provider' => 'external',
-            'media_type' => 'live',
-            'status' => 'error',
-            'is_active' => true,
-            'webrtc_stream_name' => 'lesson-' . $lesson->id,
-            'source_url' => 'http://localhost:8080/live/lesson-' . $lesson->id . '.flv',
-        ]);
-
-        $recordingsPath = sys_get_temp_dir() . '/srs-recordings-' . uniqid('', true);
-        @mkdir($recordingsPath, 0777, true);
-
-        $recordingPath = $recordingsPath . '/lesson-' . $lesson->id . '.' . time() . '.mp4';
-        file_put_contents($recordingPath, 'fake-video');
-
-        config()->set('services.srs.recordings_path', $recordingsPath);
-        config()->set('services.srs.wasabi_object_prefix', 'lessons');
-        config()->set('services.srs.wasabi_public_base_url', 'https://cdn.example.com');
 
         Sanctum::actingAs($user);
 
-        $response = $this->postJson("/api/teacher/lessons/{$lesson->id}/retry-upload-recording");
+        $response = $this->postJson("/api/teacher/lessons/{$lesson->id}/start-live", [
+            'meet_link' => 'https://example.com/not-meet',
+        ]);
 
-        $response->assertOk()->assertJsonPath('uploaded', true);
-
-        $media->refresh();
-        $this->assertSame('vod', $media->media_type);
-        $this->assertSame('ended', $media->status);
-        $this->assertStringStartsWith('https://cdn.example.com/lessons/' . $lesson->id . '/', (string) $media->source_url);
-        $this->assertFileDoesNotExist($recordingPath);
+        $response->assertStatus(422)->assertJsonValidationErrors(['meet_link']);
     }
 
-    public function test_end_live_does_not_pick_other_lesson_recording_file_prefix(): void
+    public function test_start_live_rejects_teacher_without_subject_authorization(): void
     {
-        [$user, $lesson] = $this->createAuthorizedTeacherAndLesson();
-        $otherLesson = Lesson::query()->create([
-            'title' => 'Other Live Lesson',
-            'summary' => 'Summary',
-            'level_id' => $lesson->level_id,
-            'class_id' => $lesson->class_id,
-            'subject_id' => $lesson->subject_id,
+        [$authorizedUser, $lesson] = $this->createAuthorizedTeacherAndLesson();
+        unset($authorizedUser);
+
+        [$otherUser] = $this->createUnauthorizedTeacherForLesson($lesson);
+
+        Sanctum::actingAs($otherUser);
+
+        $response = $this->postJson("/api/teacher/lessons/{$lesson->id}/start-live", [
+            'meet_link' => 'https://meet.google.com/ayc-obyo-ojq',
         ]);
 
-        LessonMedia::query()->create([
-            'lesson_id' => $lesson->id,
-            'provider' => 'external',
-            'media_type' => 'live',
-            'status' => 'live',
-            'is_active' => true,
-            'webrtc_stream_name' => 'lesson-' . $lesson->id,
-            'source_url' => 'http://localhost:8080/live/lesson-' . $lesson->id . '.flv',
-        ]);
-
-        $recordingsPath = sys_get_temp_dir() . '/srs-recordings-' . uniqid('', true);
-        @mkdir($recordingsPath, 0777, true);
-
-        file_put_contents(
-            $recordingsPath . '/lesson-' . $otherLesson->id . '.' . time() . '.mp4',
-            'fake-video'
-        );
-
-        config()->set('services.srs.recordings_path', $recordingsPath);
-        config()->set('services.srs.recording_finalize_wait_seconds', 0);
-
-        Sanctum::actingAs($user);
-
-        $response = $this->postJson("/api/teacher/lessons/{$lesson->id}/end-live");
-
-        $response->assertStatus(422)
-            ->assertJsonPath('code', 'recording_not_found')
-            ->assertJsonPath('expected_stream_name', 'lesson-' . $lesson->id);
+        $response->assertStatus(403);
     }
 
     private function createAuthorizedTeacherAndLesson(): array
@@ -252,6 +121,46 @@ class TeacherLessonLiveFlowTest extends TestCase
             'subject_id' => $subject->id,
         ]);
 
-        return [$user, $lesson];
+        return [$user, $lesson, $teacher, $subject];
+    }
+
+    private function createUnauthorizedTeacherForLesson(Lesson $lesson): array
+    {
+        $user = User::query()->create([
+            'user_name' => 'teacher_' . uniqid(),
+            'password' => bcrypt('secret123'),
+            'phone_number' => '9715' . random_int(1000000, 9999999),
+            'role' => 'Teacher',
+            'email' => 'teacher_' . uniqid() . '@example.com',
+        ]);
+
+        $teacher = Teacher::query()->create([
+            'user_id' => $user->id,
+            'date_of_birth' => '1992-01-01',
+            'full_name' => 'Other Teacher',
+            'certificate_path' => 'cert.pdf',
+            'cv_path' => 'cv.pdf',
+            'country' => 'AE',
+            'state' => 'Dubai',
+            'city' => 'Dubai',
+            'gender' => 'Male',
+        ]);
+
+        $otherSubject = Subject::query()->create([
+            'name' => 'Science ' . uniqid(),
+            'level_id' => $lesson->level_id,
+            'class_id' => $lesson->class_id,
+            'total_lessons' => 6,
+            'total_degree' => 60,
+        ]);
+
+        Specialization::query()->create([
+            'teacher_id' => $teacher->id,
+            'level_id' => $lesson->level_id,
+            'class_id' => $lesson->class_id,
+            'subject_id' => $otherSubject->id,
+        ]);
+
+        return [$user, $teacher];
     }
 }

@@ -14,10 +14,6 @@ class LessonSummaryController extends Controller
             ->leftJoin('subjects', 'subjects.id', '=', 'lessons.subject_id')
             ->leftJoin('levels', 'levels.id', '=', 'lessons.level_id')
             ->leftJoin('classes', 'classes.id', '=', 'lessons.class_id')
-            ->leftJoin('lesson_media', function ($join) {
-                $join->on('lesson_media.lesson_id', '=', 'lessons.id')
-                    ->where('lesson_media.is_active', true);
-            })
             ->select(
                 'lessons.id',
                 'lessons.title',
@@ -30,7 +26,7 @@ class LessonSummaryController extends Controller
                 'classes.name as class_name',
                 'lessons.created_at'
             )
-            ->selectRaw('COUNT(lesson_media.id) > 0 as has_media')
+            ->selectRaw("(lessons.meet_link IS NOT NULL AND lessons.meet_link <> '') as has_media")
             ->groupBy(
                 'lessons.id',
                 'lessons.title',
@@ -41,6 +37,7 @@ class LessonSummaryController extends Controller
                 'levels.name',
                 'lessons.class_id',
                 'classes.name',
+                'lessons.meet_link',
                 'lessons.created_at'
             )
             ->latest('lessons.id')
