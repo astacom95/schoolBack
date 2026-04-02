@@ -205,21 +205,12 @@ class LessonController extends Controller
 
     public function show(Request $request, Lesson $lesson): JsonResponse
     {
-        $user = $request->user();
-        if (! $user) {
+        $teacher = $this->authorizedTeacher($request);
+        if (! $teacher) {
             return response()->json(['message' => 'غير مصرح.'], 401);
         }
 
-        $teacher = Teacher::where('user_id', $user->id)->first();
-        if (! $teacher) {
-            return response()->json(['message' => 'المعلم غير موجود.'], 404);
-        }
-
-        $allowedSubject = Specialization::where('teacher_id', $teacher->id)
-            ->where('subject_id', $lesson->subject_id)
-            ->exists();
-
-        if (! $allowedSubject) {
+        if (! $this->teacherCanAccessSubject($teacher, (int) $lesson->subject_id)) {
             return response()->json(['message' => 'غير مصرح بهذا الدرس.'], 403);
         }
 
@@ -268,6 +259,81 @@ class LessonController extends Controller
         ]);
     }
 
+    public function update(Request $request, Lesson $lesson): JsonResponse
+    {
+        $teacher = $this->authorizedTeacher($request);
+        if (! $teacher) {
+            return response()->json(['message' => 'غير مصرح.'], 401);
+        }
+
+        if (! $this->teacherCanAccessSubject($teacher, (int) $lesson->subject_id)) {
+            return response()->json(['message' => 'غير مصرح بهذا الدرس.'], 403);
+        }
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'summary' => ['required', 'string'],
+            'subject_id' => ['required', 'exists:subjects,id'],
+            'quiz_file' => ['nullable', 'file', 'max:20480'],
+            'quiz_url' => ['nullable', 'string', 'max:2048'],
+        ]);
+
+        $targetSubjectId = (int) $data['subject_id'];
+        if (! $this->teacherCanAccessSubject($teacher, $targetSubjectId)) {
+            return response()->json(['message' => 'غير مصرح بهذا الموضوع.'], 403);
+        }
+
+        $subject = Subject::query()->findOrFail($targetSubjectId);
+
+        $lesson->update([
+            'title' => $data['title'],
+            'summary' => $data['summary'],
+            'subject_id' => $subject->id,
+            'level_id' => $subject->level_id,
+            'class_id' => $subject->class_id,
+        ]);
+
+        $quizPath = null;
+        if ($request->hasFile('quiz_file')) {
+            $quizPath = $request->file('quiz_file')->store('quizzes', 'public');
+        } elseif (! empty($data['quiz_url'])) {
+            $quizPath = $data['quiz_url'];
+        }
+
+        if ($quizPath) {
+            Quiz::query()->updateOrCreate(
+                ['lesson_id' => $lesson->id],
+                ['quiz_url' => $quizPath]
+            );
+        }
+
+        return response()->json([
+            'data' => [
+                'id' => $lesson->id,
+                'title' => $lesson->title,
+            ],
+            'message' => 'تم تحديث الدرس بنجاح.',
+        ]);
+    }
+
+    public function destroy(Request $request, Lesson $lesson): JsonResponse
+    {
+        $teacher = $this->authorizedTeacher($request);
+        if (! $teacher) {
+            return response()->json(['message' => 'غير مصرح.'], 401);
+        }
+
+        if (! $this->teacherCanAccessSubject($teacher, (int) $lesson->subject_id)) {
+            return response()->json(['message' => 'غير مصرح بهذا الدرس.'], 403);
+        }
+
+        $lesson->delete();
+
+        return response()->json([
+            'message' => 'تم حذف الدرس بنجاح.',
+        ]);
+    }
+
     private function teacherPayload(Teacher $teacher, ?string $teacherImage, $specializations): array
     {
         return [
@@ -277,5 +343,23 @@ class LessonController extends Controller
             'personal_image_url' => $teacherImage,
             'specializations' => $specializations,
         ];
+    }
+
+    private function authorizedTeacher(Request $request): ?Teacher
+    {
+        $user = $request->user();
+        if (! $user) {
+            return null;
+        }
+
+        return Teacher::query()->where('user_id', $user->id)->first();
+    }
+
+    private function teacherCanAccessSubject(Teacher $teacher, int $subjectId): bool
+    {
+        return Specialization::query()
+            ->where('teacher_id', $teacher->id)
+            ->where('subject_id', $subjectId)
+            ->exists();
     }
 }
