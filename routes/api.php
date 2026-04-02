@@ -9,6 +9,7 @@ use App\Http\Controllers\Manager\GuidanceController;
 use App\Http\Controllers\Manager\ExamPeriodController;
 use App\Http\Controllers\Manager\LessonSummaryController;
 use App\Http\Controllers\Manager\LevelController;
+use App\Http\Controllers\Manager\ManagerAccountController;
 use App\Http\Controllers\Manager\PapersWorkController;
 use App\Http\Controllers\Manager\QuizController;
 use App\Http\Controllers\Manager\ReportController as ManagerReportController;
@@ -66,6 +67,10 @@ Route::apiResource('manager/exams-period', ExamPeriodController::class)->only(['
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('manager')->group(function () {
+        Route::get('managers', [ManagerAccountController::class, 'index']);
+        Route::post('managers', [ManagerAccountController::class, 'store']);
+        Route::put('managers/{manager}', [ManagerAccountController::class, 'update']);
+        Route::delete('managers/{manager}', [ManagerAccountController::class, 'destroy']);
         Route::apiResource('teachers', TeacherController::class)->except(['index', 'store', 'update', 'destroy']);
         Route::apiResource('students', StudentController::class)->except(['index', 'store', 'update', 'destroy']);
         Route::apiResource('classes', ClassController::class);
@@ -83,6 +88,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('students', [TeacherStudentController::class, 'index']);
         Route::get('papers-work', [TeacherPapersWorkController::class, 'index']);
         Route::post('papers-work', [TeacherPapersWorkController::class, 'store']);
+        Route::delete('papers-work/{paper}', [TeacherPapersWorkController::class, 'destroy']);
         Route::post('reports', [TeacherReportController::class, 'store']);
         Route::get('timetable', [TimeTableController::class, 'index']);
         Route::apiResource('lessons', TeacherLessonController::class);
@@ -113,3 +119,4 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::post('/auth/login', [LoginController::class, 'login']);
 Route::post('/auth/logout', [LoginController::class, 'logout'])->middleware('auth:sanctum');
+Route::get('/auth/me', [LoginController::class, 'me'])->middleware('auth:sanctum');

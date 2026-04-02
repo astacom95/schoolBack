@@ -146,4 +146,33 @@ class PapersWorkController extends Controller
             ],
         ], 201);
     }
+
+    public function destroy(Request $request, PapersWork $paper): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user) {
+            return response()->json(['message' => 'غير مصرح.'], 401);
+        }
+
+        $teacher = Teacher::where('user_id', $user->id)->first();
+        if (! $teacher) {
+            return response()->json(['message' => 'غير مصرح.'], 403);
+        }
+
+        $authorized = Specialization::where('teacher_id', $teacher->id)
+            ->where('subject_id', $paper->subject_id)
+            ->exists();
+
+        if (! $authorized) {
+            return response()->json(['message' => 'غير مصرح.'], 403);
+        }
+
+        if ($paper->paper_path && ! Str::startsWith($paper->paper_path, ['http://', 'https://'])) {
+            Storage::disk('public')->delete($paper->paper_path);
+        }
+
+        $paper->delete();
+
+        return response()->json(['message' => 'تم حذف ورقة العمل.']);
+    }
 }

@@ -48,4 +48,21 @@ class LoginController extends Controller
             'message' => 'تم تسجيل الخروج بنجاح.',
         ]);
     }
+
+    public function me(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user) {
+            return response()->json(['message' => 'غير مصرح.'], 401);
+        }
+
+        return response()->json([
+            'data' => [
+                'id' => $user->id,
+                'user_name' => $user->user_name,
+                'role' => $user->role,
+                'email' => $user->email,
+            ],
+        ]);
+    }
 }
