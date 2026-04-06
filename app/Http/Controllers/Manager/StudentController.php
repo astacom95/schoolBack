@@ -24,6 +24,7 @@ class StudentController extends Controller
         return [
             'id' => $student->id,
             'full_name' => $student->full_name,
+            'user_name' => $student->user->user_name ?? null,
             'email' => $student->user->email ?? null,
             'phone_number' => $student->student_phone_number ?? $student->user->phone_number ?? null,
             'level_id' => $student->level_id,
@@ -177,6 +178,8 @@ class StudentController extends Controller
     {
         $data = $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
+            'user_name' => ['required', 'string', 'max:255', 'unique:users,user_name,' . $student->user_id],
+            'password' => ['nullable', 'string', 'min:6'],
             'email' => ['nullable', 'email', 'max:255', 'unique:users,email,' . $student->user_id],
             'phone_number' => ['required', 'string', 'max:255'],
             'gender' => ['required', 'in:Male,Female'],
@@ -185,17 +188,29 @@ class StudentController extends Controller
             'country' => ['nullable', 'string', 'max:255'],
             'state' => ['nullable', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:255'],
+            'personal_image' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
         ]);
 
-        DB::transaction(function () use ($student, $data) {
-            if ($student->user) {
-                $student->user->update([
-                    'email' => $data['email'] ?? null,
-                    'phone_number' => $data['phone_number'],
-                ]);
+        DB::transaction(function () use ($student, $data, $request) {
+            $newPersonalImagePath = null;
+            if ($request->hasFile('personal_image')) {
+                $newPersonalImagePath = $request->file('personal_image')->store('students/personal', 'public');
             }
 
-            $student->update([
+            if ($student->user) {
+                $userPayload = [
+                    'user_name' => $data['user_name'],
+                    'email' => $data['email'] ?? null,
+                    'phone_number' => $data['phone_number'],
+                ];
+                if (!empty($data['password'])) {
+                    $userPayload['password'] = Hash::make($data['password']);
+                }
+
+                $student->user->update($userPayload);
+            }
+
+            $studentPayload = [
                 'full_name' => $data['full_name'],
                 'student_phone_number' => $data['phone_number'],
                 'gender' => $data['gender'],
@@ -204,7 +219,16 @@ class StudentController extends Controller
                 'country' => $data['country'] ?? '',
                 'state' => $data['state'] ?? '',
                 'city' => $data['city'] ?? '',
-            ]);
+            ];
+
+            if ($newPersonalImagePath) {
+                if ($student->personal_image_path) {
+                    Storage::disk('public')->delete($student->personal_image_path);
+                }
+                $studentPayload['personal_image_path'] = $newPersonalImagePath;
+            }
+
+            $student->update($studentPayload);
         });
 
         $student->load(['user', 'level', 'classroom']);

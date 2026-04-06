@@ -19,6 +19,7 @@ class TeacherController extends Controller
         return [
             'id' => $teacher->id,
             'full_name' => $teacher->full_name,
+            'user_name' => $teacher->user->user_name ?? null,
             'email' => $teacher->user->email ?? null,
             'phone_number' => $teacher->user->phone_number ?? null,
             'gender' => $teacher->gender,
@@ -142,6 +143,8 @@ class TeacherController extends Controller
     {
         $data = $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
+            'user_name' => ['required', 'string', 'max:255', 'unique:users,user_name,' . $teacher->user_id],
+            'password' => ['nullable', 'string', 'min:6'],
             'email' => ['nullable', 'email', 'max:255', 'unique:users,email,' . $teacher->user_id],
             'phone_number' => ['required', 'string', 'max:255'],
             'gender' => ['required', 'in:Male,Female'],
@@ -149,28 +152,50 @@ class TeacherController extends Controller
             'country' => ['required', 'string', 'max:255'],
             'state' => ['required', 'string', 'max:255'],
             'city' => ['required', 'string', 'max:255'],
+            'personal_image' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
             'specializations' => ['required', 'array', 'min:1'],
             'specializations.*.level_id' => ['required', 'exists:levels,id'],
             'specializations.*.class_id' => ['required', 'exists:classes,id'],
             'specializations.*.subject_id' => ['required', 'exists:subjects,id'],
         ]);
 
-        DB::transaction(function () use ($teacher, $data) {
-            if ($teacher->user) {
-                $teacher->user->update([
-                    'email' => $data['email'] ?? null,
-                    'phone_number' => $data['phone_number'],
-                ]);
+        DB::transaction(function () use ($teacher, $data, $request) {
+            $newPersonalImagePath = null;
+            if ($request->hasFile('personal_image')) {
+                $newPersonalImagePath = $request->file('personal_image')->store('teachers/personal', 'public');
             }
 
-            $teacher->update([
+            if ($teacher->user) {
+                $userPayload = [
+                    'user_name' => $data['user_name'],
+                    'email' => $data['email'] ?? null,
+                    'phone_number' => $data['phone_number'],
+                ];
+
+                if (!empty($data['password'])) {
+                    $userPayload['password'] = Hash::make($data['password']);
+                }
+
+                $teacher->user->update($userPayload);
+            }
+
+            $teacherPayload = [
                 'full_name' => $data['full_name'],
                 'date_of_birth' => $data['date_of_birth'],
                 'country' => $data['country'],
                 'state' => $data['state'],
                 'city' => $data['city'],
                 'gender' => $data['gender'],
-            ]);
+            ];
+
+            if ($newPersonalImagePath) {
+                if ($teacher->personal_image_path) {
+                    Storage::disk('public')->delete($teacher->personal_image_path);
+                }
+                $teacherPayload['personal_image_path'] = $newPersonalImagePath;
+            }
+
+            $teacher->update($teacherPayload);
 
             $teacher->specializations()->delete();
 
