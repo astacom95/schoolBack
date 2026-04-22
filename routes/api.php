@@ -50,6 +50,7 @@ Route::get('/manager/lesson-summaries', [LessonSummaryController::class, 'index'
 Route::get('/manager/quizzes', [QuizController::class, 'index'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/papers-work', [PapersWorkController::class, 'index'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/reports', [ManagerReportController::class, 'index'])->withoutMiddleware('auth:sanctum');
+Route::get('/manager/results', [ResultController::class, 'index'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/teacher-tracking', [TeacherTrackingController::class, 'index'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/settings', [SettingController::class, 'show'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/attendance/daily-summary', [AttendanceAnalyticsController::class, 'dailySummary'])->withoutMiddleware('auth:sanctum');
@@ -77,7 +78,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('fees', FeeController::class)->except(['index', 'store', 'update']);
         Route::get('payments', [PaymentController::class, 'index']);
         Route::get('track-teachers', [TrackTeacherController::class, 'index']);
-        Route::get('results', [ResultController::class, 'index']);
     });
 
     Route::prefix('teacher')->group(function () {
