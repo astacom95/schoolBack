@@ -51,6 +51,7 @@ Route::get('/manager/quizzes', [QuizController::class, 'index'])->withoutMiddlew
 Route::get('/manager/papers-work', [PapersWorkController::class, 'index'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/reports', [ManagerReportController::class, 'index'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/results', [ResultController::class, 'index'])->withoutMiddleware('auth:sanctum');
+Route::get('/manager/results/{student}', [ResultController::class, 'show'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/teacher-tracking', [TeacherTrackingController::class, 'index'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/settings', [SettingController::class, 'show'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/attendance/daily-summary', [AttendanceAnalyticsController::class, 'dailySummary'])->withoutMiddleware('auth:sanctum');

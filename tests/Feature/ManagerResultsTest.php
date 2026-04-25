@@ -236,6 +236,153 @@ class ManagerResultsTest extends TestCase
         $this->assertSame(0, $rows[0]['max_total']);
     }
 
+    public function test_it_returns_empty_details_shape_when_detail_params_are_missing_or_invalid(): void
+    {
+        [$level, $class] = $this->createSchoolStructure(1);
+        $student = $this->createStudent($level->id, $class->id, 'No Details');
+
+        $this->getJson("/api/manager/results/{$student->id}")
+            ->assertOk()
+            ->assertJsonPath('student', null)
+            ->assertJsonPath('summary', null)
+            ->assertJsonPath('subjects', []);
+
+        $this->getJson("/api/manager/results/999999?exam_period_id=999&class_id=999")
+            ->assertOk()
+            ->assertJsonPath('student', null)
+            ->assertJsonPath('summary', null)
+            ->assertJsonPath('subjects', []);
+    }
+
+    public function test_it_returns_full_student_subject_details_for_selected_class_and_period(): void
+    {
+        [$level, $class, $math, $science] = $this->createSchoolStructure(2);
+        $period = ExamPeriod::create([
+            'exam_name' => 'Detailed Exam',
+            'exam_year' => 2026,
+            'exam_start_date' => '2026-06-01',
+            'exam_end_date' => '2026-06-10',
+        ]);
+        $student = $this->createStudent($level->id, $class->id, 'Detailed Student');
+
+        Mark::create([
+            'student_id' => $student->id,
+            'subject_id' => $math->id,
+            'level_id' => $level->id,
+            'class_id' => $class->id,
+            'exam_period_id' => $period->id,
+            'degree' => 80,
+            'total_degree' => 100,
+        ]);
+        Mark::create([
+            'student_id' => $student->id,
+            'subject_id' => $science->id,
+            'level_id' => $level->id,
+            'class_id' => $class->id,
+            'exam_period_id' => $period->id,
+            'degree' => 45,
+            'total_degree' => 50,
+        ]);
+
+        $response = $this->getJson("/api/manager/results/{$student->id}?exam_period_id={$period->id}&class_id={$class->id}");
+        $response->assertOk()
+            ->assertJsonPath('student.id', $student->id)
+            ->assertJsonPath('student.full_name', 'Detailed Student')
+            ->assertJsonPath('student.class_id', $class->id)
+            ->assertJsonPath('student.exam_period_id', $period->id)
+            ->assertJsonPath('summary.earned_total', 125)
+            ->assertJsonPath('summary.max_total', 150)
+            ->assertJsonPath('summary.percentage', 83)
+            ->assertJsonPath('summary.subjects_count', 2);
+
+        $subjects = collect($response->json('subjects'))->keyBy('subject_name');
+        $this->assertCount(2, $subjects);
+        $this->assertSame(80, $subjects["Math"]['percentage']);
+        $this->assertSame(90, $subjects["Math 2"]['percentage']);
+    }
+
+    public function test_it_ignores_detail_marks_from_other_periods_and_classes(): void
+    {
+        [$levelOne, $classOne, $mathOne] = $this->createSchoolStructure(1);
+        [$levelTwo, $classTwo, $mathTwo] = $this->createSchoolStructure(1, 'Level 2', 'Class B', 'Math B');
+        $periodOne = ExamPeriod::create([
+            'exam_name' => 'P1',
+            'exam_year' => 2026,
+            'exam_start_date' => '2026-07-01',
+            'exam_end_date' => '2026-07-05',
+        ]);
+        $periodTwo = ExamPeriod::create([
+            'exam_name' => 'P2',
+            'exam_year' => 2026,
+            'exam_start_date' => '2026-08-01',
+            'exam_end_date' => '2026-08-05',
+        ]);
+        $student = $this->createStudent($levelOne->id, $classOne->id, 'Scoped Student');
+        $otherStudent = $this->createStudent($levelTwo->id, $classTwo->id, 'Other Scoped Student');
+
+        Mark::create([
+            'student_id' => $student->id,
+            'subject_id' => $mathOne->id,
+            'level_id' => $levelOne->id,
+            'class_id' => $classOne->id,
+            'exam_period_id' => $periodOne->id,
+            'degree' => 70,
+            'total_degree' => 100,
+        ]);
+        Mark::create([
+            'student_id' => $student->id,
+            'subject_id' => $mathOne->id,
+            'level_id' => $levelOne->id,
+            'class_id' => $classOne->id,
+            'exam_period_id' => $periodTwo->id,
+            'degree' => 10,
+            'total_degree' => 100,
+        ]);
+        Mark::create([
+            'student_id' => $otherStudent->id,
+            'subject_id' => $mathTwo->id,
+            'level_id' => $levelTwo->id,
+            'class_id' => $classTwo->id,
+            'exam_period_id' => $periodOne->id,
+            'degree' => 90,
+            'total_degree' => 100,
+        ]);
+
+        $response = $this->getJson("/api/manager/results/{$student->id}?exam_period_id={$periodOne->id}&class_id={$classOne->id}");
+        $response->assertOk()
+            ->assertJsonPath('summary.earned_total', 70)
+            ->assertJsonPath('summary.max_total', 100)
+            ->assertJsonPath('summary.percentage', 70)
+            ->assertJsonCount(1, 'subjects');
+    }
+
+    public function test_it_handles_zero_total_degree_in_student_detail_subjects(): void
+    {
+        [$level, $class, $math] = $this->createSchoolStructure(1);
+        $period = ExamPeriod::create([
+            'exam_name' => 'Zero Detail',
+            'exam_year' => 2026,
+            'exam_start_date' => '2026-09-01',
+            'exam_end_date' => '2026-09-05',
+        ]);
+        $student = $this->createStudent($level->id, $class->id, 'Zero Detail Student');
+
+        Mark::create([
+            'student_id' => $student->id,
+            'subject_id' => $math->id,
+            'level_id' => $level->id,
+            'class_id' => $class->id,
+            'exam_period_id' => $period->id,
+            'degree' => 10,
+            'total_degree' => 0,
+        ]);
+
+        $response = $this->getJson("/api/manager/results/{$student->id}?exam_period_id={$period->id}&class_id={$class->id}");
+        $response->assertOk()
+            ->assertJsonPath('summary.percentage', 0)
+            ->assertJsonPath('subjects.0.percentage', 0);
+    }
+
     protected function createSchoolStructure(
         int $requiredSubjects,
         string $levelName = 'Level 1',
