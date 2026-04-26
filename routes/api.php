@@ -47,6 +47,7 @@ use Illuminate\Support\Facades\Route;
 Route::get('/manager/students/public', [StudentController::class, 'index'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/teachers/public', [TeacherController::class, 'index'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/lesson-summaries', [LessonSummaryController::class, 'index'])->withoutMiddleware('auth:sanctum');
+Route::get('/manager/today-lessons', [LessonSummaryController::class, 'today'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/quizzes', [QuizController::class, 'index'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/papers-work', [PapersWorkController::class, 'index'])->withoutMiddleware('auth:sanctum');
 Route::get('/manager/reports', [ManagerReportController::class, 'index'])->withoutMiddleware('auth:sanctum');
