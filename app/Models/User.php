@@ -13,4 +13,7 @@ class User extends Authenticatable
 
     protected $guarded = [];
     protected $hidden = ['password'];
+    protected $casts = [
+        'active' => 'boolean',
+    ];
 }

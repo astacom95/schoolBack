@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\StudentRegistrationController;
 use App\Http\Controllers\LessonLiveController;
 use App\Http\Controllers\Manager\ClassController;
 use App\Http\Controllers\Manager\AttendanceAnalyticsController;
@@ -63,6 +64,8 @@ Route::apiResource('manager/levels', LevelController::class)->only(['index', 'st
 Route::apiResource('manager/subjects', SubjectController::class)->only(['index', 'store', 'update', 'destroy'])->withoutMiddleware('auth:sanctum');
 Route::apiResource('manager/fees', FeeController::class)->only(['index', 'store', 'update'])->withoutMiddleware('auth:sanctum');
 Route::apiResource('manager/students', StudentController::class)->only(['index', 'store', 'update', 'destroy'])->withoutMiddleware('auth:sanctum');
+Route::patch('/manager/students/{student}/status', [StudentController::class, 'updateStatus'])->withoutMiddleware('auth:sanctum');
+Route::patch('/manager/students/{student}/payment', [StudentController::class, 'updatePaymentAmount'])->withoutMiddleware('auth:sanctum');
 Route::apiResource('manager/teachers', TeacherController::class)->only(['index', 'store', 'update', 'destroy'])->withoutMiddleware('auth:sanctum');
 Route::apiResource('manager/teacher-time-table', TeacherTimeTableController::class)->only(['index', 'store', 'update'])->withoutMiddleware('auth:sanctum');
 Route::apiResource('manager/guidance', GuidanceController::class)->only(['index', 'store', 'destroy'])->withoutMiddleware('auth:sanctum');
@@ -120,5 +123,6 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 Route::post('/auth/login', [LoginController::class, 'login']);
+Route::post('/auth/register/student', [StudentRegistrationController::class, 'register']);
 Route::post('/auth/logout', [LoginController::class, 'logout'])->middleware('auth:sanctum');
 Route::get('/auth/me', [LoginController::class, 'me'])->middleware('auth:sanctum');

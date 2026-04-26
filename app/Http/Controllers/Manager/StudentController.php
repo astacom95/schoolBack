@@ -24,6 +24,7 @@ class StudentController extends Controller
         return [
             'id' => $student->id,
             'full_name' => $student->full_name,
+            'active' => (bool) ($student->user->active ?? true),
             'user_name' => $student->user->user_name ?? null,
             'email' => $student->user->email ?? null,
             'phone_number' => $student->student_phone_number ?? $student->user->phone_number ?? null,
@@ -132,6 +133,7 @@ class StudentController extends Controller
                 'phone_number' => $data['phone_number'],
                 'role' => 'Student',
                 'email' => $data['email'] ?? null,
+                'active' => true,
             ]);
 
             /** @var Student $student */
@@ -235,6 +237,83 @@ class StudentController extends Controller
 
         return response()->json([
             'data' => $this->transformStudent($student),
+        ]);
+    }
+
+    public function updateStatus(Request $request, Student $student)
+    {
+        $data = $request->validate([
+            'active' => ['required', 'boolean'],
+        ]);
+
+        if (! $student->user) {
+            return response()->json(['message' => 'لا يمكن تحديث حالة طالب بدون حساب مستخدم.'], 422);
+        }
+
+        $student->user->update([
+            'active' => (bool) $data['active'],
+        ]);
+
+        $student->load(['user', 'level', 'classroom']);
+
+        return response()->json([
+            'data' => $this->transformStudent($student),
+            'message' => $data['active'] ? 'تم تفعيل الطالب بنجاح.' : 'تم تعطيل الطالب بنجاح.',
+        ]);
+    }
+
+    public function updatePaymentAmount(Request $request, Student $student)
+    {
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $amount = (float) $data['amount'];
+
+        DB::transaction(function () use ($student, $amount) {
+            $payments = Payment::query()
+                ->where('student_id', $student->id)
+                ->orderBy('id')
+                ->get();
+
+            if ($payments->isEmpty()) {
+                Payment::create([
+                    'student_id' => $student->id,
+                    'payment_method' => 'cash',
+                    'amount' => $amount,
+                    'transaction_uid' => (string) Str::uuid(),
+                    'level_id' => $student->level_id,
+                    'class_id' => $student->class_id,
+                    'guardian_name' => $student->guardian_name,
+                    'guardian_phone_number' => $student->guardian_phone_number,
+                ]);
+                return;
+            }
+
+            $primaryPayment = $payments->first();
+            $primaryPayment->update([
+                'amount' => $amount,
+                'payment_method' => 'cash',
+                'level_id' => $student->level_id,
+                'class_id' => $student->class_id,
+                'guardian_name' => $student->guardian_name,
+                'guardian_phone_number' => $student->guardian_phone_number,
+            ]);
+
+            if ($payments->count() > 1) {
+                $payments
+                    ->slice(1)
+                    ->each(fn (Payment $payment) => $payment->delete());
+            }
+        });
+
+        $student->load(['user', 'level', 'classroom']);
+
+        $totalFee = (float) Fee::query()->where('class_id', $student->class_id)->value('total_fee');
+
+        return response()->json([
+            'data' => $this->transformStudent($student, $amount, $totalFee),
+            'message' => 'تم تحديث مبلغ الدفع بنجاح.',
         ]);
     }
 

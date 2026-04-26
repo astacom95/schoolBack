@@ -69,8 +69,10 @@ class LessonSummaryController extends Controller
         $lessons = Lesson::query()
             ->leftJoin('subjects', 'subjects.id', '=', 'lessons.subject_id')
             ->leftJoin('quizzes', 'quizzes.lesson_id', '=', 'lessons.id')
-            ->leftJoin('track_teachers as tracks', 'tracks.lesson_id', '=', 'lessons.id')
-            ->leftJoin('teachers', 'teachers.id', '=', 'tracks.teacher_id')
+            ->leftJoin('specializations', function ($join) {
+                $join->on('specializations.subject_id', '=', 'lessons.subject_id');
+            })
+            ->leftJoin('teachers as specialized_teachers', 'specialized_teachers.id', '=', 'specializations.teacher_id')
             ->whereDate('lessons.created_at', $today)
             ->select(
                 'lessons.id',
@@ -80,7 +82,7 @@ class LessonSummaryController extends Controller
                 'lessons.created_at',
                 'subjects.name as subject_name'
             )
-            ->selectRaw('MAX(teachers.full_name) as teacher_name')
+            ->selectRaw('MAX(specialized_teachers.full_name) as teacher_name')
             ->selectRaw('MAX(quizzes.quiz_url) as quiz_url')
             ->groupBy(
                 'lessons.id',

@@ -27,6 +27,12 @@ class LoginController extends Controller
             ], 401);
         }
 
+        if ($user->active === false) {
+            return response()->json([
+                'message' => 'الحساب غير مفعل حالياً. يرجى انتظار تفعيل الحساب من الإدارة.',
+            ], 403);
+        }
+
         $token = $user->createToken('api')->plainTextToken;
 
         return response()->json([
